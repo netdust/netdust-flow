@@ -1,0 +1,87 @@
+{
+  "flow": "patch",
+  "version": 1,
+  "state": {
+    "gate": {}
+  },
+  "nodes": [
+    {
+      "id": "build",
+      "kind": "agent",
+      "craft": [
+        "agents/implementer",
+        "skills/testing-workflow"
+      ],
+      "out": [
+        "code",
+        "tests"
+      ]
+    },
+    {
+      "id": "gate-suite",
+      "kind": "gate",
+      "run": "{test_suite_cmd}"
+    },
+    {
+      "id": "gate-floors",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/floor-check.py --base {base_ref}"
+    },
+    {
+      "id": "redispatch",
+      "kind": "human",
+      "out": [
+        "seal redispatch"
+      ]
+    },
+    {
+      "id": "gate-redispatch",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/seal.py check {feature_dir} redispatch"
+    }
+  ],
+  "edges": [
+    {
+      "from": "__start__",
+      "to": "build"
+    },
+    {
+      "from": "build",
+      "to": "gate-suite"
+    },
+    {
+      "from": "gate-suite",
+      "to": "build",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "gate-suite",
+      "to": "gate-floors",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-floors",
+      "to": "__end__",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-floors",
+      "to": "redispatch",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "redispatch",
+      "to": "gate-redispatch"
+    },
+    {
+      "from": "gate-redispatch",
+      "to": "__end__",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-redispatch",
+      "to": "redispatch",
+      "when": "gate.exit != 0"
+    }
+  ]
+}

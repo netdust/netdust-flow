@@ -1,0 +1,51 @@
+# flows/patch.yaml — the short road: small, plan-free work.
+#
+# Never for auth, user-input, schema/migration, or payment surfaces —
+# enforced mechanically: gate-floors scans the actual diff and routes
+# floor-touching work to a human for re-dispatch. Floors push up only:
+# there is deliberately no edge that lets anyone override a floor down.
+# Walker guardrails (iteration budget, dry-loop detection) apply here
+# exactly as in deliver.
+#
+# v1 (I4): the re-dispatch is itself evidence — the human seals
+# `redispatch` approved once the work has been moved to the deliver
+# flow; only that seal ends the patch road. Resumption is not a seal.
+
+flow: patch
+version: 1
+
+state:
+  gate: {}                # last gate exit code — written by the walker
+
+nodes:
+  - id: build
+    kind: agent
+    craft: [agents/implementer, skills/testing-workflow]
+    out: [code, tests]
+
+  - id: gate-suite        # exit-code only; the stack sub-plugin supplies
+    kind: gate            # the concrete command per project
+    run: "{test_suite_cmd}"
+
+  - id: gate-floors       # principle 8's gate: floor-touching work
+    kind: gate            # cannot exit on the short road
+    run: "{netdust_flow}/bin/floor-check.py --base {base_ref}"
+
+  - id: redispatch        # floor hit: a human moves the work to deliver
+    kind: human           # and seals `redispatch` approved; there is no
+    out: [seal redispatch]  # decision that continues on the short road
+
+  - id: gate-redispatch   # reads the seal; anything but approved re-asks
+    kind: gate
+    run: "{netdust_flow}/bin/seal.py check {feature_dir} redispatch"
+
+edges:
+  - {from: __start__,       to: build}
+  - {from: build,           to: gate-suite}
+  - {from: gate-suite,      to: build,           when: gate.exit != 0}
+  - {from: gate-suite,      to: gate-floors,     when: gate.exit == 0}
+  - {from: gate-floors,     to: __end__,         when: gate.exit == 0}
+  - {from: gate-floors,     to: redispatch,      when: gate.exit != 0}
+  - {from: redispatch,      to: gate-redispatch}
+  - {from: gate-redispatch, to: __end__,         when: gate.exit == 0}
+  - {from: gate-redispatch, to: redispatch,      when: gate.exit != 0}

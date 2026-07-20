@@ -1,0 +1,217 @@
+{
+  "flow": "deliver",
+  "version": 1,
+  "state": {
+    "gate": {}
+  },
+  "nodes": [
+    {
+      "id": "brainstorm",
+      "kind": "agent",
+      "craft": [
+        "skills/refining-ideas"
+      ],
+      "out": [
+        "idea.md"
+      ]
+    },
+    {
+      "id": "spec",
+      "kind": "agent",
+      "craft": [
+        "skills/spec-authoring"
+      ],
+      "in": [
+        "idea.md"
+      ],
+      "out": [
+        "spec.md"
+      ]
+    },
+    {
+      "id": "gate-spec",
+      "kind": "gate",
+      "run": "spec-kit/gate-check.py {feature_dir}"
+    },
+    {
+      "id": "plan",
+      "kind": "agent",
+      "craft": [
+        "agents/planner",
+        "skills/planning"
+      ],
+      "in": [
+        "spec.md"
+      ],
+      "out": [
+        "plan.md",
+        "tasks.md"
+      ]
+    },
+    {
+      "id": "gate-plan",
+      "kind": "gate",
+      "run": "spec-kit/gate-check.py {feature_dir}"
+    },
+    {
+      "id": "approve-plan",
+      "kind": "human",
+      "out": [
+        "seal approve-plan"
+      ]
+    },
+    {
+      "id": "gate-approval",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/seal.py check {feature_dir} approve-plan"
+    },
+    {
+      "id": "build",
+      "kind": "agent",
+      "craft": [
+        "agents/implementer",
+        "agents/test-author",
+        "agents/reviewer",
+        "agents/security-sentinel",
+        "agents/invariant-auditor",
+        "agents/code-simplicity-reviewer",
+        "agents/performance-oracle"
+      ],
+      "in": [
+        "tasks.md"
+      ],
+      "out": [
+        "code",
+        "checked tasks"
+      ]
+    },
+    {
+      "id": "gate-ledger",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/ledger.py {feature_dir}"
+    },
+    {
+      "id": "unblock",
+      "kind": "human",
+      "out": [
+        "resolved task"
+      ]
+    },
+    {
+      "id": "shakeout",
+      "kind": "human",
+      "craft": [
+        "agents/shakeout-qa",
+        "skills/shake-out",
+        "skills/feature-acceptance"
+      ],
+      "out": [
+        "seal shakeout"
+      ]
+    },
+    {
+      "id": "gate-acceptance",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/seal.py check {feature_dir} shakeout"
+    }
+  ],
+  "edges": [
+    {
+      "from": "__start__",
+      "to": "brainstorm"
+    },
+    {
+      "from": "brainstorm",
+      "to": "spec"
+    },
+    {
+      "from": "spec",
+      "to": "gate-spec"
+    },
+    {
+      "from": "gate-spec",
+      "to": "plan",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-spec",
+      "to": "spec",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "plan",
+      "to": "gate-plan"
+    },
+    {
+      "from": "gate-plan",
+      "to": "approve-plan",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-plan",
+      "to": "plan",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "approve-plan",
+      "to": "gate-approval"
+    },
+    {
+      "from": "gate-approval",
+      "to": "build",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-approval",
+      "to": "plan",
+      "when": "gate.exit == 2"
+    },
+    {
+      "from": "gate-approval",
+      "to": "approve-plan",
+      "when": "gate.exit == 1"
+    },
+    {
+      "from": "build",
+      "to": "gate-ledger"
+    },
+    {
+      "from": "gate-ledger",
+      "to": "build",
+      "when": "gate.exit == 1"
+    },
+    {
+      "from": "gate-ledger",
+      "to": "unblock",
+      "when": "gate.exit == 2"
+    },
+    {
+      "from": "gate-ledger",
+      "to": "shakeout",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "unblock",
+      "to": "gate-ledger"
+    },
+    {
+      "from": "shakeout",
+      "to": "gate-acceptance"
+    },
+    {
+      "from": "gate-acceptance",
+      "to": "__end__",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-acceptance",
+      "to": "build",
+      "when": "gate.exit == 2"
+    },
+    {
+      "from": "gate-acceptance",
+      "to": "shakeout",
+      "when": "gate.exit == 1"
+    }
+  ]
+}

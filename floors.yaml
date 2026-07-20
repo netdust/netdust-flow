@@ -1,0 +1,14 @@
+# Dispatch floors — work matching any category below MUST take the
+# deliver flow. Checked mechanically by bin/floor-check.py on the
+# patch road; tune patterns per project reality.
+floors:
+  auth:
+    paths: ["**/auth/**", "**/wp-login*", "**/capabilities*"]
+    content: ['current_user_can', 'wp_set_auth_cookie', 'password_hash', 'wp_verify_nonce']
+  user-input:
+    content: ['\$_(POST|GET|REQUEST)\b', 'sanitize_', 'esc_sql']
+  schema:
+    paths: ["**/migrations/**", "**/database/**"]
+    content: ['dbDelta', 'CREATE TABLE', 'ALTER TABLE']
+  payments:
+    content: ['stripe', 'mollie', 'woocommerce_order', 'payment_intent']

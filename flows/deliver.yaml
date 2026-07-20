@@ -1,0 +1,109 @@
+# flows/deliver.yaml — the long road: plan-gated, loop-driven, human-sealed.
+#
+# Dispatch floors (enforced at intake, never here): work touching auth,
+# user-input handling, schema/migrations, or payments MUST take this flow.
+# The agent may route work UP to deliver, never down past a floor.
+#
+# v1 (I4): human decisions are EVIDENCE. A human node only yields; the
+# decision re-enters the machine as a seal record (bin/seal.py) checked
+# by the gate that follows it — resumption is never approval, rejection
+# has its own edge, and no node routes to the absorbing __human__ state.
+# seal.py check exits: 0 approved · 2 rejected · 1 no seal yet.
+#
+# Runtime: walked by flow-check.py via the existing Stop hook.
+
+flow: deliver
+version: 1
+
+state:
+  gate: {}                # last gate exit code — written by the walker
+
+nodes:
+  - id: brainstorm        # Stage 0
+    kind: agent
+    craft: [skills/refining-ideas]
+    out: [idea.md]
+
+  - id: spec
+    kind: agent
+    craft: [skills/spec-authoring]
+    in: [idea.md]
+    out: [spec.md]
+
+  - id: gate-spec         # Stage 0.5 — unchanged script
+    kind: gate
+    run: spec-kit/gate-check.py {feature_dir}
+
+  - id: plan              # planner sequences the plan-time gate skills
+    kind: agent           # (threat-modeling, invariants, acceptance
+    craft:                # matrix); gate-plan proves the sections exist
+      - agents/planner
+      - skills/planning
+    in: [spec.md]
+    out: [plan.md, tasks.md]
+
+  - id: gate-plan         # Stage 1.5 — unchanged script
+    kind: gate
+    run: spec-kit/gate-check.py {feature_dir}
+
+  - id: approve-plan      # yield point only — the decision is the seal
+    kind: human
+    out: [seal approve-plan]
+
+  - id: gate-approval     # reads the recorded decision; never infers it
+    kind: gate
+    run: "{netdust_flow}/bin/seal.py check {feature_dir} approve-plan"
+
+  - id: build             # loop body — review clusters are ledger tasks;
+    kind: agent           # subagent-stop gates tests per task, unchanged
+    craft:
+      - agents/implementer
+      - agents/test-author
+      - agents/reviewer
+      - agents/security-sentinel
+      - agents/invariant-auditor
+      - agents/code-simplicity-reviewer
+      - agents/performance-oracle
+    in: [tasks.md]
+    out: [code, checked tasks]
+
+  - id: gate-ledger       # loop exit — evidence-derived on request:
+    kind: gate            # every task attested via attest.py, SUITE
+    run: "{netdust_flow}/bin/ledger.py {feature_dir}"
+    # exit 0 = finished · 1 = continue · 2 = a [HUMAN] task blocks
+
+  - id: unblock           # replaces __human__: resolve the [HUMAN] task
+    kind: human           # (attest it), then the ledger re-derives —
+    out: [resolved task]  # the flow resumes mechanically, no trap state
+
+  - id: shakeout          # Stage 3 — attended; feature-acceptance VERIFY
+    kind: human           # drives the plan's acceptance-flows matrix
+    craft: [agents/shakeout-qa, skills/shake-out, skills/feature-acceptance]
+    out: [seal shakeout]
+
+  - id: gate-acceptance   # the finish is a read of the human's verdict
+    kind: gate
+    run: "{netdust_flow}/bin/seal.py check {feature_dir} shakeout"
+
+edges:
+  - {from: __start__,      to: brainstorm}
+  - {from: brainstorm,     to: spec}
+  - {from: spec,           to: gate-spec}
+  - {from: gate-spec,      to: plan,         when: gate.exit == 0}
+  - {from: gate-spec,      to: spec,         when: gate.exit != 0}
+  - {from: plan,           to: gate-plan}
+  - {from: gate-plan,      to: approve-plan, when: gate.exit == 0}
+  - {from: gate-plan,      to: plan,         when: gate.exit != 0}
+  - {from: approve-plan,   to: gate-approval}
+  - {from: gate-approval,  to: build,        when: gate.exit == 0}
+  - {from: gate-approval,  to: plan,         when: gate.exit == 2}
+  - {from: gate-approval,  to: approve-plan, when: gate.exit == 1}
+  - {from: build,          to: gate-ledger}
+  - {from: gate-ledger,    to: build,        when: gate.exit == 1}
+  - {from: gate-ledger,    to: unblock,      when: gate.exit == 2}
+  - {from: gate-ledger,    to: shakeout,     when: gate.exit == 0}
+  - {from: unblock,        to: gate-ledger}
+  - {from: shakeout,       to: gate-acceptance}
+  - {from: gate-acceptance, to: __end__,     when: gate.exit == 0}
+  - {from: gate-acceptance, to: build,       when: gate.exit == 2}
+  - {from: gate-acceptance, to: shakeout,    when: gate.exit == 1}
