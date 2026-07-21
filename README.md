@@ -137,7 +137,7 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
 - `commands/flow.md` — `/flow` arm · off · status · seal · eval.
 - `examples/` — four small lint-clean flows with expected paths and
   the evidence each generates.
-- `tests/` — 82 tests (walker + hook integration + evidence + lint +
+- `tests/` — 85 tests (walker + hook integration + evidence + lint +
   eval).
 
 Trust boundary, named: git notes, the marker
