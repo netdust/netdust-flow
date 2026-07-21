@@ -1,9 +1,9 @@
-"""Integration tests: patched hooks/loop-gate.py driving the REAL
+"""Integration tests: hooks/loop-gate.py driving the REAL
 bin/flow-check.py over the real flow twins, with stubbed gate scripts.
 
-Mirrors the upstream test_loop_gate.py conventions: subprocess the hook
-with a stdin payload, control the world through files, assert on stdout
-JSON + marker state. The hook must always exit 0 (fail-open)."""
+Conventions: subprocess the hook with a stdin payload, control the
+world through files, assert on stdout JSON + marker state. The hook
+must always exit 0 (fail-open)."""
 import json
 import subprocess
 import sys
@@ -192,9 +192,9 @@ def test_journal_records_dry_disarm(tmp_path):
 
 
 def test_flowless_marker_is_ignored_untouched(tmp_path):
-    # the spec-kit-era single-cycle /loop marker is retired: a marker
-    # without flow fields is not ours — no block, no journal, and the
-    # marker is left in place (never delete what we don't understand)
+    # a marker without flow fields is not ours — no block, no journal,
+    # and the marker is left in place (never delete what we don't
+    # understand)
     home, cwd = setup(tmp_path, PATCH, "build")
     m = marker_of(cwd)
     del m["flow"], m["node"], m["flow_check"]

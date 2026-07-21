@@ -124,8 +124,8 @@ re-run `flow-lint --compile` (new hash), and the next runs form a new
 cohort to compare against. Never let an agent rewrite a flow from an
 eval report — the graph is a contract, not a prompt.
 
-## Legacy markers
+## Foreign markers
 
-The spec-kit-era single-cycle /loop marker is retired. The hook only
-drives markers that carry `flow` + `node`; a marker without them is
-ignored untouched (logged, stop allowed) — it is not ours to delete.
+The hook only drives markers that carry `flow` + `node`; a marker
+without them is ignored untouched (logged, stop allowed) — it is not
+ours to delete.

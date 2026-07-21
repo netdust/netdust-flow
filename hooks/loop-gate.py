@@ -6,9 +6,7 @@ When a run is ARMED (marker file tasks/.harness-loop.json exists,
 written by /flow), this hook consults bin/flow-check.py (the walker)
 at every session stop and BLOCKS the stop while the flow is
 unfinished. No marker → no-op (zero cost for every normal session).
-A marker without flow fields is not ours and is left untouched — the
-spec-kit-era single-cycle /loop marker is retired; nothing in this
-repo reads, writes, or resolves spec-kit.
+A marker without flow fields is not ours and is left untouched.
 
 Token cost of the loop itself: ~zero. The gate is deterministic Python;
 the only context it ever adds is the 2-line block reason.
@@ -133,8 +131,7 @@ def main() -> None:
     flow = marker.get("flow")
     flow_node = marker.get("node")
     if not (flow and flow_node):
-        # not our marker (the retired spec-kit-era /loop schema, or
-        # something else entirely) — leave it alone, allow the stop
+        # not our marker — leave it alone, allow the stop
         log(f"ignore flowless marker cwd={cwd}")
         return
 
