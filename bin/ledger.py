@@ -19,7 +19,7 @@ Verdict:
             the dirty worktree).
     exit 2  BLOCKED  — the next unit is marked [HUMAN].
 
-stdout carries the loop-check-compatible contract:
+stdout carries the walker-gate contract:
     LEDGER: <verdict> — <reason>
     progress: done=<attested> total=<tasks>
 """

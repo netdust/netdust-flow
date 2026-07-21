@@ -13,7 +13,7 @@
 # Runtime: walked by flow-check.py via the existing Stop hook.
 
 flow: deliver
-version: 1
+version: 2
 
 state:
   gate: {}                # last gate exit code — written by the walker
@@ -30,9 +30,9 @@ nodes:
     in: [idea.md]
     out: [spec.md]
 
-  - id: gate-spec         # Stage 0.5 — unchanged script
-    kind: gate
-    run: spec-kit/gate-check.py {feature_dir}
+  - id: gate-spec         # spec/plan structure check — the project
+    kind: gate            # supplies the command (bound at arm time,
+    run: "{gate_check_cmd} {feature_dir}"   # unbound → fail closed)
 
   - id: plan              # planner sequences the plan-time gate skills
     kind: agent           # (threat-modeling, invariants, acceptance
@@ -42,9 +42,9 @@ nodes:
     in: [spec.md]
     out: [plan.md, tasks.md]
 
-  - id: gate-plan         # Stage 1.5 — unchanged script
+  - id: gate-plan         # same bound check against the finished plan
     kind: gate
-    run: spec-kit/gate-check.py {feature_dir}
+    run: "{gate_check_cmd} {feature_dir}"
 
   - id: approve-plan      # yield point only — the decision is the seal
     kind: human

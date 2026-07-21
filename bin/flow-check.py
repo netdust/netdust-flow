@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """flow-check.py — the flow walker (netdust-flow v0.1)
 
-Successor of loop-check.py: instead of assuming one hard-coded cycle
-(build ⟲ ledger), it walks a declared flow file. Same philosophy — the
-answer is derived ONLY from artifacts and exit codes, never from an
-agent asserting "done".
+Walks a declared flow file. The answer is derived ONLY from artifacts
+and exit codes, never from an agent asserting "done".
 
     usage: flow-check.py <feature-dir> --flow <flow.yaml|.json> --node <id>
                          [--bind name=value ...] [--plugin-root DIR]
@@ -22,7 +20,7 @@ marker) and advances along declared edges:
 A start node of kind human counts as satisfied (the human acted, the
 session resumed and stopped) and the walk advances through its edge.
 
-stdout contract (superset of loop-check's — loop-gate keeps working):
+stdout contract (read by hooks/loop-gate.py):
 
     FLOW: CONTINUE — node: build — gate-ledger exit 1: T03 next
     next: build
@@ -60,12 +58,12 @@ Flow loading: a compiled .json twin (written by `flow-lint --compile`)
 is preferred so the Stop-hook path needs no PyYAML; the .yaml source is
 read only when no twin exists and PyYAML is importable.
 
-Hook migration (the whole v0.1 diff to loop-gate.py):
-  1. `/flow <dir> <flow>` arms the marker with two extra fields:
-     {"flow": "flows/deliver.json", "node": "brainstorm", ...}
+Hook wiring:
+  1. `/flow <dir> <flow>` arms the marker:
+     {"flow": "flows/deliver.json", "node": "__start__", ...}
   2. loop-gate calls this script with --flow/--node from the marker.
-  3. loop-gate persists the `next:` line back into marker["node"].
-  Budget, dry-loop detection, disarm rules, tracing: unchanged.
+  3. loop-gate persists the `next:` line back into marker["node"] and
+     folds the `trace:` lines into the run journal.
 """
 from __future__ import annotations
 

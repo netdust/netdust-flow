@@ -55,12 +55,14 @@ downward.
   grammar, gates run as argv (no shell, no eval), every config problem
   BLOCKS instead of guessing. Progress prefers a gate's
   evidence-derived `progress:` line over checkbox counts.
-- `hooks/loop-gate.py` — the Stop hook, patched for flow mode; legacy
-  `/loop` markers keep working unchanged during migration. In flow
-  mode it also appends run-journal events (every gate exit — red ones
-  included, which exist nowhere else — plus one stop decision per
-  invocation) to `<feature-dir>/.flow-journal.jsonl`, fail-open:
-  journaling can never affect the gate's decision.
+- `hooks/loop-gate.py` — the Stop hook: drives flow markers only (a
+  marker without `flow` + `node` is ignored untouched — the
+  spec-kit-era `/loop` path is retired; nothing in this repo reads,
+  writes, or resolves spec-kit). Each stop it also appends run-journal
+  events (every gate exit — red ones included, which exist nowhere
+  else — plus one stop decision per invocation) to
+  `<feature-dir>/.flow-journal.jsonl`, fail-open: journaling can never
+  affect the gate's decision.
 - `bin/flow-eval.py` — reads journals across features and groups runs
   into cohorts by flow version (content hash of the compiled twin):
   per-gate exit histograms, first-pass rates, executions-to-green,

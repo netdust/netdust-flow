@@ -1,6 +1,6 @@
 {
   "flow": "deliver",
-  "version": 1,
+  "version": 2,
   "state": {
     "gate": {}
   },
@@ -31,7 +31,7 @@
     {
       "id": "gate-spec",
       "kind": "gate",
-      "run": "spec-kit/gate-check.py {feature_dir}"
+      "run": "{gate_check_cmd} {feature_dir}"
     },
     {
       "id": "plan",
@@ -51,7 +51,7 @@
     {
       "id": "gate-plan",
       "kind": "gate",
-      "run": "spec-kit/gate-check.py {feature_dir}"
+      "run": "{gate_check_cmd} {feature_dir}"
     },
     {
       "id": "approve-plan",

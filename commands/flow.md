@@ -3,11 +3,11 @@ description: Arm the netdust-flow walker — the Stop-hook then drives execution
 allowed_tools: ["Bash", "Read", "Write"]
 ---
 
-Arm, disarm, or inspect the flow walker for one feature. Same Stop-hook
-mechanism as /loop (`hooks/loop-gate.py`), consuming `bin/flow-check.py`
-(the walker) instead of `spec-kit/loop-check.py` (the single-cycle
-ledger). FINISHED, CONTINUE, and BLOCKED are derived from the declared
-graph, gate exit codes, and artifacts — never from your own assertion.
+Arm, disarm, or inspect the flow walker for one feature. The Stop hook
+(`hooks/loop-gate.py`) consumes `bin/flow-check.py` (the walker) at
+every session stop. FINISHED, CONTINUE, and BLOCKED are derived from
+the declared graph, gate exit codes, and artifacts — never from your
+own assertion.
 
 Resolve `<netdust-flow>` via the stable symlink `~/.claude/netdust-flow`
 (same convention as `~/.claude/plugins/netdust-agent`).
@@ -24,10 +24,12 @@ Preconditions — refuse to arm (say why) if any fails:
    The walker reads the `.json` twin; a stale or FAIL-ing flow must
    never drive a run.
 2. **deliver only — the graft:** `<feature-dir>/tasks.md` exists with
-   `- [ ] Tnn` lines, and
-   `python3 <plugin>/spec-kit/gate-check.py <feature-dir>` exits 0.
-   Same rule as /loop: a walker on a gate-failing plan grinds a
-   defective plan.
+   `- [ ] Tnn` lines, and the project defines the spec/plan gate
+   command (`Gate check:` line in the project CLAUDE.md, or ask the
+   human once) — bound as `gate_check_cmd`, it drives `gate-spec` and
+   `gate-plan`. Running it against `<feature-dir>` must exit 0 before
+   arming: a walker on a gate-failing plan grinds a defective plan.
+   No gate command → no spec/plan gates → refuse.
 3. **patch only — bindings:** the project defines the suite command
    (`Test suite:` line in the project CLAUDE.md, or ask the human once).
    No suite command → no exit gate → refuse. Floors are no longer
@@ -50,6 +52,7 @@ Then:
     "flow": "<netdust-flow>/flows/<flow>.json", "node": "__start__",
     "flow_check": "<netdust-flow>/bin/flow-check.py",
     "binds": {"netdust_flow": "<netdust-flow>",
+              "gate_check_cmd": "<cmd>",      # deliver: spec/plan gates
               "test_suite_cmd": "<cmd>",      # patch + deliver SUITE attest
               "base_ref": "main"},            # patch: floor-check diff base
     "max_dry": 25,                            # patch only: budget-governed
@@ -64,9 +67,7 @@ Then:
    `<feature-dir>/.flow-journal.jsonl`; tracked, it would dirty the
    worktree mid-run and the ledger's clean-tree check could never
    pass).
-7. Emit `python3 <plugin>/spec-kit/run-trace.py append <feature-dir>
-   flow-armed flow=<flow> budget=<N>`.
-8. Confirm to the user in two lines: armed, flow, budget, and how it
+7. Confirm to the user in two lines: armed, flow, budget, and how it
    ends (FINISHED at a gate → disarms · human node → yields with the
    ask · budget/dry → disarms · `/flow off` anytime).
 
@@ -93,8 +94,9 @@ itself the evidence.
 
 ## /flow off  (disarm)
 
-Emit `flow-disarmed reason=manual` via run-trace (feature dir from the
-marker), then delete `tasks/.harness-loop.json`. Confirm in one line.
+Delete `tasks/.harness-loop.json`. Confirm in one line. (The run's
+journal stays; a manually disarmed run has no terminal stop event, so
+`/flow eval` reports it as open — that is the honest state.)
 
 ## /flow status
 
@@ -122,8 +124,8 @@ re-run `flow-lint --compile` (new hash), and the next runs form a new
 cohort to compare against. Never let an agent rewrite a flow from an
 eval report — the graph is a contract, not a prompt.
 
-## Relationship to /loop
+## Legacy markers
 
-/loop still arms the legacy single-cycle marker and keeps working — the
-hook branches on the marker's `flow` field. New work goes through /flow;
-retire /loop once the evals pass on flow-driven runs.
+The spec-kit-era single-cycle /loop marker is retired. The hook only
+drives markers that carry `flow` + `node`; a marker without them is
+ignored untouched (logged, stop allowed) — it is not ours to delete.

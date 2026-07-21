@@ -27,10 +27,12 @@ sys.exit(code)
 
 def setup(tmp_path, flow, node, binds=None, extra=None):
     home = tmp_path / "home"
-    stub_kit = home / ".claude" / "plugins" / "netdust-agent" / "spec-kit"
-    stub_kit.mkdir(parents=True)
-    for name in ("gate-check", "loop-check"):
-        (stub_kit / f"{name}.py").write_text(GATE_STUB.format(name=name))
+    home.mkdir()
+    # deliver's spec/plan gates run the bound {gate_check_cmd}; the stub
+    # reads <feature-dir>/.stub-gate-check (absent → exit 0)
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    (stubs / "gate-check.py").write_text(GATE_STUB.format(name="gate-check"))
     cwd = tmp_path / "proj"
     (cwd / "specs" / "demo").mkdir(parents=True)
     (cwd / "tasks").mkdir()
@@ -46,7 +48,8 @@ def setup(tmp_path, flow, node, binds=None, extra=None):
               "flow": str(flow), "node": node,
               "flow_check": str(FLOW_CHECK),
               "gate_timeout": 30}
-    marker["binds"] = {"netdust_flow": str(ROOT), "base_ref": "main"}
+    marker["binds"] = {"netdust_flow": str(ROOT), "base_ref": "main",
+                       "gate_check_cmd": str(stubs / "gate-check.py")}
     if binds:
         marker["binds"].update(binds)
     if extra:
@@ -188,24 +191,15 @@ def test_journal_records_dry_disarm(tmp_path):
     assert j[-1]["decision"] == "disarm-dry"
 
 
-def test_legacy_marker_ignores_flow_path(tmp_path):
-    # legacy path resolves spec-kit relative to the gate file itself, so
-    # give the gate a private home with a stub loop-check sibling.
-    site = tmp_path / "site"
-    (site / "hooks").mkdir(parents=True)
-    (site / "spec-kit").mkdir()
-    (site / "hooks" / "loop-gate.py").write_text(GATE.read_text())
-    (site / "spec-kit" / "loop-check.py").write_text(
-        GATE_STUB.format(name="loop-check"))
+def test_flowless_marker_is_ignored_untouched(tmp_path):
+    # the spec-kit-era single-cycle /loop marker is retired: a marker
+    # without flow fields is not ours — no block, no journal, and the
+    # marker is left in place (never delete what we don't understand)
     home, cwd = setup(tmp_path, PATCH, "build")
     m = marker_of(cwd)
     del m["flow"], m["node"], m["flow_check"]
     (cwd / "tasks" / ".harness-loop.json").write_text(json.dumps(m))
-    p = subprocess.run(
-        [sys.executable, str(site / "hooks" / "loop-gate.py")],
-        input=json.dumps({"cwd": str(cwd)}),
-        capture_output=True, text=True, timeout=60,
-        env={"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/local/bin"})
-    assert p.returncode == 0 and p.stdout.strip() == ""
-    assert marker_of(cwd) is None           # FINISHED disarm, legacy path
-    assert journal_of(cwd) is None          # journaling is flow-mode only
+    rc, out = run_gate(cwd, home)
+    assert rc == 0 and out.strip() == ""
+    assert marker_of(cwd) is not None       # left untouched
+    assert journal_of(cwd) is None          # nothing journaled

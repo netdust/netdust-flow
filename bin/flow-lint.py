@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """flow-lint.py — netdust-flow v0
 
-Static gate for flow definitions. Sibling of gate-check.py: findings,
-FAIL/WARN lines, exit code — no opinions, no LLM.
+Static gate for flow definitions: findings, FAIL/WARN lines, exit
+code — no opinions, no LLM.
 
 Invariants it exists to enforce:
   I1  every edge condition is machine-readable — `<state key> <op>

@@ -28,11 +28,12 @@ sys.exit(code)
 
 @pytest.fixture()
 def env(tmp_path):
+    # plugin-root is only exercised by the relative-run-path test; the
+    # real flows bind their gate commands (no plugin-resolved gates)
     plugin = tmp_path / "plugin"
-    (plugin / "spec-kit").mkdir(parents=True)
-    for name in ("gate-check", "loop-check"):
-        (plugin / "spec-kit" / f"{name}.py").write_text(
-            GATE_STUB.format(name=name))
+    (plugin / "checks").mkdir(parents=True)
+    (plugin / "checks" / "gate.py").write_text(
+        GATE_STUB.format(name="gate-check"))
     feature = tmp_path / "feature"
     feature.mkdir()
     flowstub = tmp_path / "flowstub"
@@ -45,6 +46,10 @@ print("FAIL  [stub]  simulated finding" if code else "ok")
 {extra}
 sys.exit(code)
 """
+    # deliver's spec/plan gates run the BOUND command {gate_check_cmd};
+    # same control file name as before so set_gate() keeps working
+    (flowstub / "bin" / "gate-check.py").write_text(baked.format(
+        ctl=feature / ".stub-gate-check", extra=""))
     # the ledger stub emits an evidence-derived progress line, like the
     # real ledger.py — the walker must prefer it over checkbox counts
     (flowstub / "bin" / "ledger.py").write_text(baked.format(
@@ -69,7 +74,8 @@ def run(flow, node, feature, plugin, *extra, flowstub=None):
     binds = []
     if flowstub is not None:
         binds = ["--bind", f"netdust_flow={flowstub}",
-                 "--bind", "base_ref=main"]
+                 "--bind", "base_ref=main",
+                 "--bind", f"gate_check_cmd={flowstub}/bin/gate-check.py"]
     p = subprocess.run(
         [sys.executable, str(FLOW_CHECK), str(feature),
          "--flow", str(flow), "--node", node,
@@ -295,7 +301,7 @@ def test_cycle_without_agent_blocks(env, tmp_path):
         "flow": "cycle", "version": 0, "state": {"gate": {}},
         "nodes": [
             {"id": "g1", "kind": "gate",
-             "run": "spec-kit/gate-check.py {feature_dir}"},
+             "run": "checks/gate.py {feature_dir}"},
         ],
         "edges": [
             {"from": "__start__", "to": "g1"},
