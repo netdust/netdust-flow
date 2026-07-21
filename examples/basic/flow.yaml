@@ -1,0 +1,24 @@
+# examples/basic — the smallest legal flow: one agent, one gate.
+# The agent builds; the suite's exit code is the only finish authority.
+
+flow: example-basic
+version: 1
+
+state:
+  gate: {}                # last gate exit code — written by the walker
+
+nodes:
+  - id: build
+    kind: agent
+    craft: [skills/testing-workflow]
+    out: [code, tests]
+
+  - id: gate-suite        # the project's real suite command, bound at
+    kind: gate            # arm time; unbound → the walk fails closed
+    run: "{test_suite_cmd}"
+
+edges:
+  - {from: __start__,  to: build}
+  - {from: build,      to: gate-suite}
+  - {from: gate-suite, to: __end__, when: gate.exit == 0}
+  - {from: gate-suite, to: build,   when: gate.exit != 0}

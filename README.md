@@ -1,16 +1,50 @@
 # netdust-flow
 
-Declared workflows for AI-assisted delivery: **a YAML file, one Stop
-hook, and exit codes.**
+Evidence-driven delivery protocol for AI-assisted software
+development: **a YAML file, one Stop hook, and exit codes.**
 
-Every feature takes one of two declared roads. Agents do the work,
-deterministic gates decide progress, humans seal both ends. The graph
-is data — versioned, schema-checked, linted — so the process is
-identical run after run, and readable by anyone in one sitting. Built
-for a solo studio shipping WordPress sites and smaller apps with
-Claude Code; craft (agents, skills) lives in
-[netdust-plugins](https://github.com/netdust/netdust-plugins) and is
-referenced by nodes, never embedded.
+Agents may create work and propose routing.
+Only verified evidence can advance or finish delivery.
+
+```
+              Agent
+                |
+                v
+         creates artifact
+                |
+                v
+        deterministic gate
+          /            \
+       fail            pass
+        |                |
+        v                v
+      Agent         human seal?
+                         |
+                     approved
+                         |
+                         v
+                    next state
+                         |
+                         v
+                      __end__
+```
+
+Agents do the work. Gates verify the work. Humans make explicit,
+recorded decisions. Completion is a state transition, not a statement.
+The implementation is small; the claim is not: **workflow authority
+belongs to verifiable evidence, not to the system that produced the
+artifact.**
+
+## Three words, used precisely
+
+| Term | Meaning | Examples |
+| --- | --- | --- |
+| **Assertion** | A statement made by an actor. Never workflow state. | "tests pass" · a checked checkbox · "review done" |
+| **Evidence** | A recorded fact produced by a verifier, independently of the claimant. | an exit code · an attest note · a human seal |
+| **State** | The workflow position, derived from evidence on request. | the marker's node · the ledger's verdict |
+
+The only formula in the system:
+`assertion → verification → evidence → state transition`.
 
 ## The two flows
 
@@ -54,9 +88,23 @@ downward.
   gate when missing. Enforced by the project's gate command and the
   ledger, not the lint (a flow file cannot see plan content).
 
-I1, I2, and I4's shape are enforced by `bin/flow-lint.py`; I3 by the
-attest/ledger design; I5 by the plan gate + ledger. The run ledger
-(`docs/RUNS.md`) records the delivery that motivated I5.
+All five are the same rule at different altitudes: **no assertion is a
+signal.** I1, I2, and I4's shape are enforced by `bin/flow-lint.py`;
+I3 by the attest/ledger design; I5 by the plan gate + ledger.
+
+## Documentation
+
+| Doc | What it covers |
+| --- | --- |
+| [`docs/architecture.md`](docs/architecture.md) | The system model: node types, lifecycle, authority. |
+| [`docs/protocol.md`](docs/protocol.md) | The rules, independent of implementation — the stable contract. |
+| [`docs/runtime.md`](docs/runtime.md) | The implementation: hook, walker, gates, journal. |
+| [`docs/evidence.md`](docs/evidence.md) | Assertion vs evidence vs state; the evidence stores; the trust boundary. |
+| [`docs/evaluation.md`](docs/evaluation.md) | Measurement as a first-class feature: journal → eval → improvement. |
+| [`docs/comparison.md`](docs/comparison.md) | How this differs from agent frameworks, workflow engines, and CI. |
+| [`docs/theory.md`](docs/theory.md) | The research verdict: sources, debate, confidence, limitations. |
+| [`docs/runs.md`](docs/runs.md) | The run ledger — every flow-driven delivery, measured. |
+| [`docs/examples.md`](docs/examples.md) | Index of the example flows under `examples/`. |
 
 ## Parts
 
@@ -68,45 +116,35 @@ attest/ledger design; I5 by the plan gate + ledger. The run ledger
   I1/I2/I4, gate results actually consumed by their out-edges.
 - `bin/flow-check.py` — the walker: stateless, closed condition
   grammar, gates run as argv (no shell, no eval), every config problem
-  BLOCKS instead of guessing. Progress prefers a gate's
-  evidence-derived `progress:` line over checkbox counts.
+  BLOCKS instead of guessing.
 - `hooks/loop-gate.py` — the Stop hook: drives flow markers only; a
   marker without `flow` + `node` is not ours and is ignored untouched.
-  Each stop it also appends run-journal events (every gate exit — red
-  ones included, which exist nowhere else — plus one stop decision per
-  invocation) to `<feature-dir>/.flow-journal.jsonl`, fail-open:
-  journaling can never affect the gate's decision.
-- `bin/flow-eval.py` — reads journals across features and groups runs
-  into cohorts by flow version (content hash of the compiled twin):
-  per-gate exit histograms, first-pass rates, executions-to-green,
-  block-stops per agent node, human yields. The adaptation loop is
-  deliberately human-closed — the journal measures, you edit the YAML,
-  the lint compiles a new hash, the next runs form a new cohort to
-  compare. Nothing feeds back into a flow automatically.
+  Each stop it appends run-journal events (every gate exit — red ones
+  included, which exist nowhere else — plus one stop decision) to
+  `<feature-dir>/.flow-journal.jsonl`, fail-open.
 - `bin/attest.py` / `bin/ledger.py` — evidence recorded by the
-  verifier into git notes; delivery state derived on request. Drift is
-  caught at both levels: SUITE attest must sit on HEAD (commit-level)
-  and the worktree must be clean (tree-level).
+  verifier into git notes; delivery state derived on request.
 - `bin/seal.py` — human decisions as evidence (I4): `record` writes a
   decision into git notes, `check` reads the latest back as an exit
   code for the seal gate after each human node.
+- `bin/flow-eval.py` — aggregates run journals into cohorts by flow
+  version (content hash of the twin): exit histograms, first-pass
+  rates, executions-to-green, human yields. The journal measures, the
+  human adapts, the lint recompiles — nothing feeds back into a flow
+  automatically.
 - `bin/floor-check.py` + `floors.yaml` — the dispatch floors as a
-  mechanical diff scan on the patch road; an unresolvable base ref
-  fails closed (exit 2), never shrinks the diff silently.
+  mechanical diff scan on the patch road; fails closed.
 - `commands/flow.md` — `/flow` arm · off · status · seal · eval.
-- `docs/RUNS.md` — the run ledger: one entry per flow-driven
-  delivery — outcome, eval stats, findings, and the adaptations they
-  forced. THEORY.md argues; this file measures.
-- `tests/` — 82 tests here (walker + hook integration + evidence +
-  lint + eval); the upstream loop-gate suite (21) passes against the
-  patched hook.
+- `examples/` — four small lint-clean flows with expected paths and
+  the evidence each generates.
+- `tests/` — 82 tests (walker + hook integration + evidence + lint +
+  eval).
 
 Trust boundary, named: git notes, the marker
 (`tasks/.harness-loop.json`), the compiled `.json` twins, and the run
 journal (`.flow-journal.jsonl`) are tamper-resistant, not tamper-proof.
 The pretooluse guard should deny agent writes to all four (`git notes`
-outside `attest.py`/`seal.py` included); see the docstrings in
-`attest.py` and `hooks/loop-gate.py`. The journal must also be
+outside `attest.py`/`seal.py` included). The journal must also be
 GITIGNORED in the project (as `/flow` arm ensures): tracked, it would
 dirty the worktree mid-run and the ledger's clean-tree check could
 never pass.
@@ -120,6 +158,13 @@ Claude Code plus the Stop hook — nothing else. Symlink this checkout:
 ## Deliberately not here
 
 Parallel fan-out (solo operation), an external runner (the file format
-keeps that door open), agent-designed graphs (the thesis is the
-opposite), an include mechanism (two files don't duplicate enough to
-matter). Revisit each only when a real trigger fires.
+keeps that door open), agent-designed graphs, self-modifying
+workflows, autonomous policy changes, hidden completion heuristics.
+The human measurement loop is not a limitation; it is part of the
+architecture. Revisit each only when a real trigger fires.
+
+---
+
+netdust-flow is not trying to make agents appear autonomous. It is
+trying to make autonomous work trustworthy, by ensuring that progress
+and completion require evidence.

@@ -1,0 +1,49 @@
+# examples/migration — schema/data migration: backup proven before
+# anything runs, mechanical verification after, human sign-off to
+# finish. Fail-closed at both ends: no backup evidence → no
+# migration; no verify green → no sign-off ask.
+
+flow: example-migration
+version: 1
+
+state:
+  gate: {}
+
+nodes:
+  - id: gate-backup       # evidence FIRST: the backup command's exit
+    kind: gate            # code, not anyone's word that a backup exists
+    run: "{backup_cmd}"
+
+  - id: env               # backup impossible → a human fixes the
+    kind: human           # environment; resuming re-proves the backup
+    out: [restored backup precondition]
+
+  - id: apply
+    kind: agent
+    craft: [agents/implementer, skills/migrations]
+    out: [migrated schema, migration log]
+
+  - id: gate-verify       # row counts, integrity checks, smoke suite —
+    kind: gate            # whatever the project binds; exit code only
+    run: "{verify_cmd}"
+
+  - id: signoff
+    kind: human
+    out: [seal migration]
+
+  - id: gate-signoff
+    kind: gate
+    run: "{netdust_flow}/bin/seal.py check {feature_dir} migration"
+
+edges:
+  - {from: __start__,    to: gate-backup}
+  - {from: gate-backup,  to: apply,     when: gate.exit == 0}
+  - {from: gate-backup,  to: env,       when: gate.exit != 0}
+  - {from: env,          to: gate-backup}
+  - {from: apply,        to: gate-verify}
+  - {from: gate-verify,  to: signoff,   when: gate.exit == 0}
+  - {from: gate-verify,  to: apply,     when: gate.exit != 0}
+  - {from: signoff,      to: gate-signoff}
+  - {from: gate-signoff, to: __end__,   when: gate.exit == 0}
+  - {from: gate-signoff, to: apply,     when: gate.exit == 2}
+  - {from: gate-signoff, to: signoff,   when: gate.exit == 1}

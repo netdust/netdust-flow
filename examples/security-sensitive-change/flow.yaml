@@ -1,0 +1,69 @@
+# examples/security-sensitive-change — floor-class work (auth, user
+# input, schema, payments): human-approved plan, attested independent
+# review as its own gate, human sign-off to finish. Both human
+# decisions are seals (I4); the review is evidence, not craft (I5).
+
+flow: example-security-change
+version: 1
+
+state:
+  gate: {}
+
+nodes:
+  - id: plan
+    kind: agent
+    craft: [agents/planner, skills/threat-modeling]
+    out: [plan.md, tasks.md]
+
+  - id: gate-plan
+    kind: gate
+    run: "{gate_check_cmd} {feature_dir}"
+
+  - id: approve           # yield point only — resumption is not approval
+    kind: human
+    out: [seal approve-plan]
+
+  - id: gate-approval
+    kind: gate
+    run: "{netdust_flow}/bin/seal.py check {feature_dir} approve-plan"
+
+  - id: build
+    kind: agent
+    craft: [agents/implementer, agents/security-sentinel]
+    in: [tasks.md]
+    out: [code, tests]
+
+  - id: gate-review       # I5 made structural: the review check runs
+    kind: gate            # as its own gate, not a craft declaration
+    run: "{review_check_cmd} {feature_dir}"
+
+  - id: gate-suite
+    kind: gate
+    run: "{test_suite_cmd}"
+
+  - id: signoff           # the human owns the finish on floor work
+    kind: human
+    out: [seal signoff]
+
+  - id: gate-signoff
+    kind: gate
+    run: "{netdust_flow}/bin/seal.py check {feature_dir} signoff"
+
+edges:
+  - {from: __start__,     to: plan}
+  - {from: plan,          to: gate-plan}
+  - {from: gate-plan,     to: approve,     when: gate.exit == 0}
+  - {from: gate-plan,     to: plan,        when: gate.exit != 0}
+  - {from: approve,       to: gate-approval}
+  - {from: gate-approval, to: build,       when: gate.exit == 0}
+  - {from: gate-approval, to: plan,        when: gate.exit == 2}
+  - {from: gate-approval, to: approve,     when: gate.exit == 1}
+  - {from: build,         to: gate-review}
+  - {from: gate-review,   to: gate-suite,  when: gate.exit == 0}
+  - {from: gate-review,   to: build,       when: gate.exit != 0}
+  - {from: gate-suite,    to: signoff,     when: gate.exit == 0}
+  - {from: gate-suite,    to: build,       when: gate.exit != 0}
+  - {from: signoff,       to: gate-signoff}
+  - {from: gate-signoff,  to: __end__,     when: gate.exit == 0}
+  - {from: gate-signoff,  to: build,       when: gate.exit == 2}
+  - {from: gate-signoff,  to: signoff,     when: gate.exit == 1}

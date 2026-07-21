@@ -1,0 +1,51 @@
+# examples/wordpress-plugin — a trimmed deliver road for a small
+# plugin: spec-gated, ledger-driven build, human shake-out seal.
+# (The full production road is flows/deliver.yaml; this variant drops
+# the brainstorm and plan-approval stages for plugin-sized work.)
+
+flow: example-wp-plugin
+version: 1
+
+state:
+  gate: {}
+
+nodes:
+  - id: spec
+    kind: agent
+    craft: [skills/spec-authoring]
+    out: [spec.md, plan.md, tasks.md]
+
+  - id: gate-spec         # project-bound structure check (I1: the
+    kind: gate            # gate command is data, not judgment)
+    run: "{gate_check_cmd} {feature_dir}"
+
+  - id: build             # review cluster is a ledger task (I5)
+    kind: agent
+    craft: [agents/implementer, agents/test-author, agents/reviewer]
+    in: [tasks.md]
+    out: [code, checked tasks]
+
+  - id: gate-ledger       # every task attested; SUITE on HEAD; clean tree
+    kind: gate
+    run: "{netdust_flow}/bin/ledger.py {feature_dir}"
+
+  - id: shakeout          # attended QA — yield point only (I4)
+    kind: human
+    out: [seal shakeout]
+
+  - id: gate-acceptance   # the finish reads the recorded verdict
+    kind: gate
+    run: "{netdust_flow}/bin/seal.py check {feature_dir} shakeout"
+
+edges:
+  - {from: __start__,       to: spec}
+  - {from: spec,            to: gate-spec}
+  - {from: gate-spec,       to: build,    when: gate.exit == 0}
+  - {from: gate-spec,       to: spec,     when: gate.exit != 0}
+  - {from: build,           to: gate-ledger}
+  - {from: gate-ledger,     to: shakeout, when: gate.exit == 0}
+  - {from: gate-ledger,     to: build,    when: gate.exit != 0}
+  - {from: shakeout,        to: gate-acceptance}
+  - {from: gate-acceptance, to: __end__,  when: gate.exit == 0}
+  - {from: gate-acceptance, to: build,    when: gate.exit == 2}
+  - {from: gate-acceptance, to: shakeout, when: gate.exit == 1}
