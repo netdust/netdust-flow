@@ -102,6 +102,7 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
 | [`docs/evidence.md`](docs/evidence.md) | Assertion vs evidence vs state; the evidence stores; the trust boundary. |
 | [`docs/evaluation.md`](docs/evaluation.md) | Measurement as a first-class feature: journal → eval → improvement. |
 | [`docs/comparison.md`](docs/comparison.md) | How this differs from agent frameworks, workflow engines, and CI. |
+| [`docs/article.md`](docs/article.md) | The essay: why generation and authority must be separated. |
 | [`docs/theory.md`](docs/theory.md) | The research verdict: sources, debate, confidence, limitations. |
 | [`docs/runs.md`](docs/runs.md) | The run ledger — every flow-driven delivery, measured. |
 | [`docs/examples.md`](docs/examples.md) | Index of the example flows under `examples/`. |
