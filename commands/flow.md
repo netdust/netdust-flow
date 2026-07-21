@@ -1,5 +1,5 @@
 ---
-description: Arm the netdust-flow walker — the Stop-hook then drives execution along the declared flow graph until it FINISHES at a gate, BLOCKS on a human node, or the budget runs out. Usage — /flow <feature-dir> <flow> (arm) · /flow off (disarm) · /flow status
+description: Arm the netdust-flow walker — the Stop-hook then drives execution along the declared flow graph until it FINISHES at a gate, BLOCKS on a human node, or the budget runs out. Usage — /flow <feature-dir> <flow> (arm) · /flow off (disarm) · /flow status · /flow eval [<feature-dir> ...]
 allowed_tools: ["Bash", "Read", "Write"]
 ---
 
@@ -59,7 +59,11 @@ Then:
    (patch has no tasks.md, so its `progress:` line is node-based and
    nearly constant — `max_dry: 25` hands termination to the iteration
    budget instead of the dry-loop counter. deliver keeps the default 2.)
-6. Ensure `.gitignore` contains `tasks/.harness-loop.json`.
+6. Ensure `.gitignore` contains `tasks/.harness-loop.json` AND
+   `.flow-journal.jsonl` (the hook appends run-journal events to
+   `<feature-dir>/.flow-journal.jsonl`; tracked, it would dirty the
+   worktree mid-run and the ledger's clean-tree check could never
+   pass).
 7. Emit `python3 <plugin>/spec-kit/run-trace.py append <feature-dir>
    flow-armed flow=<flow> budget=<N>`.
 8. Confirm to the user in two lines: armed, flow, budget, and how it
@@ -99,6 +103,24 @@ Read the marker; run
 --node <node> --cwd .` (plus each bind) and report: armed/disarmed,
 flow, current node, iteration/budget, and the walker's verdict line
 verbatim.
+
+## /flow eval  [<feature-dir> ...]
+
+Run `python3 <netdust-flow>/bin/flow-eval.py <feature-dir> ...`
+(default: every `specs/*` dir that has a `.flow-journal.jsonl`) and
+show the report verbatim. It aggregates the run journals the hook
+wrote: per-run outcomes, then per-cohort (flow @ twin-hash) gate exit
+histograms, first-pass rates, executions-to-green, block-stops per
+agent node, and human yields — where the flow works and where the
+model struggles.
+
+Read it with the report's own caveat: a gate's exit code is a routing
+value, so judge loop gates (gate-ledger, gate-suite) by
+mean-to-green and check gates (gate-spec, gate-plan, seal gates) by
+first-pass. Adaptation is yours, not the system's: edit the flow YAML,
+re-run `flow-lint --compile` (new hash), and the next runs form a new
+cohort to compare against. Never let an agent rewrite a flow from an
+eval report — the graph is a contract, not a prompt.
 
 ## Relationship to /loop
 

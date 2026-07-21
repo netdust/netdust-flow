@@ -30,6 +30,13 @@ stdout contract (superset of loop-check's — loop-gate keeps working):
 
   line 1  verdict + reason
   next:   the node the hook must persist into the marker
+  after the contract lines, one `trace: {...}` JSON line per gate
+  executed during the walk (node, exit code — RED exits included, which
+  is the only place they are visible at all: attest records passes,
+  the ledger derives state, but a failing gate leaves no other record).
+  The hook folds these into the run journal; standalone runs (e.g.
+  /flow status) just print them, which is deliberate — a status check
+  must not write history.
   progress prefers, in order: the LAST `progress:` line a gate printed
   during this walk (evidence-derived — e.g. ledger.py's attest counts),
   then tasks.md checkbox counts, then node position. Checkboxes feed
@@ -217,6 +224,7 @@ def walk(doc: dict, start: str, feature_dir: Path, binds: dict,
     ran_gates: set[str] = set()
     last_gate = ""
     last_progress: str | None = None
+    traces: list[dict] = []
 
     def emit(line1: str, nxt: str, code: int) -> int:
         pos = order.index(nxt) + 1 if nxt in order else len(order)
@@ -224,6 +232,8 @@ def walk(doc: dict, start: str, feature_dir: Path, binds: dict,
         print(f"next: {nxt}")
         # evidence-derived progress from a gate beats checkbox counting
         print(last_progress or progress(feature_dir, pos, len(order)))
+        for t in traces:
+            print("trace: " + json.dumps(t))
         return code
 
     for _ in range(MAX_HOPS):
@@ -257,7 +267,11 @@ def walk(doc: dict, start: str, feature_dir: Path, binds: dict,
             ran_gates.add(cur)
             rc, brief, prog = run_gate(node, binds, plugin_root, timeout, cwd)
             if rc is None:
+                traces.append({"event": "gate-error", "node": cur,
+                               "reason": brief})
                 return emit(f"FLOW: BLOCKED — {brief}", cur, BLOCKED)
+            traces.append({"event": "gate", "node": cur, "exit": rc,
+                           "brief": brief[:120]})
             state["gate"]["exit"] = rc
             if prog:
                 last_progress = prog

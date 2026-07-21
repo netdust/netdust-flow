@@ -122,6 +122,72 @@ def test_flow_max_dry_override(tmp_path):
     assert marker_of(cwd) is None           # disarmed as dry loop
 
 
+def journal_of(cwd):
+    p = cwd / "specs" / "demo" / ".flow-journal.jsonl"
+    if not p.exists():
+        return None
+    return [json.loads(l) for l in p.read_text().splitlines()]
+
+
+def test_journal_records_red_gate_and_block_stop(tmp_path):
+    home, cwd = setup(tmp_path, PATCH, "build",
+                      binds={"test_suite_cmd": suite(tmp_path, 1)})
+    run_gate(cwd, home)
+    j = journal_of(cwd)
+    gates = [e for e in j if e["event"] == "gate"]
+    stops = [e for e in j if e["event"] == "stop"]
+    assert gates and gates[0]["node"] == "gate-suite" and gates[0]["exit"] == 1
+    assert stops[-1]["decision"] == "block" and stops[-1]["node"] == "build"
+    assert stops[-1]["verdict"] == "CONTINUE" and stops[-1]["iter"] == 1
+    # every entry carries the run identity and the flow version hash
+    assert all(e["run"] and e["flow"] == "patch" and len(e["fhash"]) == 12
+               for e in j)
+    # the minted run id is persisted so later stops share it
+    assert marker_of(cwd)["run_id"] == stops[-1]["run"]
+
+
+def test_journal_run_id_stable_across_stops(tmp_path):
+    home, cwd = setup(tmp_path, PATCH, "build",
+                      binds={"test_suite_cmd": suite(tmp_path, 1)})
+    run_gate(cwd, home)
+    run_gate(cwd, home)
+    stops = [e for e in journal_of(cwd) if e["event"] == "stop"]
+    assert len(stops) == 2
+    assert stops[0]["run"] == stops[1]["run"]
+    assert [s["iter"] for s in stops] == [1, 2]
+
+
+def test_journal_records_finish_and_survives_disarm(tmp_path):
+    home, cwd = setup(tmp_path, PATCH, "build",
+                      binds={"test_suite_cmd": suite(tmp_path, 0)})
+    run_gate(cwd, home)
+    assert marker_of(cwd) is None            # disarmed
+    j = journal_of(cwd)                      # the journal outlives the run
+    assert j[-1]["decision"] == "disarm-finished"
+    assert j[-1]["node"] == "__end__"
+    # both gates of the green patch walk were journaled on the way out
+    assert [e["node"] for e in j if e["event"] == "gate"] == [
+        "gate-suite", "gate-floors"]
+
+
+def test_journal_records_yield_on_human_node(tmp_path):
+    home, cwd = setup(tmp_path, DELIVER, "plan")
+    run_gate(cwd, home)                      # gate-plan passes → human
+    j = journal_of(cwd)
+    assert j[-1]["decision"] == "yield" and j[-1]["node"] == "approve-plan"
+    assert j[-1]["verdict"] == "BLOCKED" and "reason" in j[-1]
+
+
+def test_journal_records_dry_disarm(tmp_path):
+    home, cwd = setup(tmp_path, PATCH, "build",
+                      binds={"test_suite_cmd": suite(tmp_path, 1)},
+                      extra={"max_dry": 1})
+    run_gate(cwd, home)                      # done 0→1: dry resets
+    run_gate(cwd, home)                      # done unchanged: disarm
+    j = journal_of(cwd)
+    assert j[-1]["decision"] == "disarm-dry"
+
+
 def test_legacy_marker_ignores_flow_path(tmp_path):
     # legacy path resolves spec-kit relative to the gate file itself, so
     # give the gate a private home with a stub loop-check sibling.
@@ -142,3 +208,4 @@ def test_legacy_marker_ignores_flow_path(tmp_path):
         env={"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/local/bin"})
     assert p.returncode == 0 and p.stdout.strip() == ""
     assert marker_of(cwd) is None           # FINISHED disarm, legacy path
+    assert journal_of(cwd) is None          # journaling is flow-mode only

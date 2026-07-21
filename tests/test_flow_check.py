@@ -306,6 +306,64 @@ def test_cycle_without_agent_blocks(env, tmp_path):
     assert rc == 2 and "revisited" in out
 
 
+# ── trace lines (journal food) ───────────────────────────────────────
+
+def traces_of(out):
+    return [json.loads(l[len("trace: "):])
+            for l in out.splitlines() if l.startswith("trace: ")]
+
+
+def test_trace_lines_follow_the_contract_lines(env):
+    # the stdout contract is a superset: 3 contract lines FIRST (the
+    # hook reads line 1 as the reason), trace lines after
+    plugin, feature, flowstub = env
+    set_gate(feature, "gate-check", 1)
+    rc, out = run(DELIVER, "spec", feature, plugin, flowstub=flowstub)
+    lines = out.splitlines()
+    assert lines[0].startswith("FLOW: ")
+    assert lines[1].startswith("next: ")
+    assert lines[2].startswith("progress: ")
+    assert all(l.startswith("trace: ") for l in lines[3:])
+
+
+def test_trace_records_red_gate_exit(env):
+    # a failing gate leaves no attest and no ledger mark — the trace
+    # line is the only record that the red exit ever happened
+    plugin, feature, flowstub = env
+    set_gate(feature, "gate-check", 1)
+    rc, out = run(DELIVER, "spec", feature, plugin, flowstub=flowstub)
+    assert any(t["event"] == "gate" and t["node"] == "gate-spec"
+               and t["exit"] == 1 for t in traces_of(out))
+
+
+def test_trace_records_green_gate_exit(env):
+    plugin, feature, flowstub = env
+    set_gate(feature, "gate-check", 0)
+    rc, out = run(DELIVER, "spec", feature, plugin, flowstub=flowstub)
+    assert any(t["event"] == "gate" and t["node"] == "gate-spec"
+               and t["exit"] == 0 for t in traces_of(out))
+
+
+def test_trace_records_every_gate_in_a_multi_gate_walk(env, tmp_path):
+    # patch, suite green, floors clean: gate-suite AND gate-floors both
+    # execute in one walk and both must appear
+    plugin, feature, flowstub = env
+    suite = tmp_path / "suite.py"
+    suite.write_text("import sys; sys.exit(0)")
+    rc, out = run(PATCH, "build", feature, plugin,
+                  "--bind", f"test_suite_cmd={sys.executable} {suite}",
+                  flowstub=flowstub)
+    nodes = [t["node"] for t in traces_of(out) if t["event"] == "gate"]
+    assert nodes == ["gate-suite", "gate-floors"]
+
+
+def test_trace_gate_error_on_unbound_placeholder(env):
+    plugin, feature, flowstub = env
+    rc, out = run(PATCH, "build", feature, plugin, flowstub=flowstub)
+    assert any(t["event"] == "gate-error" and t["node"] == "gate-suite"
+               for t in traces_of(out))
+
+
 # ── condition grammar unit tests ─────────────────────────────────────
 
 def _fc():

@@ -56,7 +56,18 @@ downward.
   BLOCKS instead of guessing. Progress prefers a gate's
   evidence-derived `progress:` line over checkbox counts.
 - `hooks/loop-gate.py` — the Stop hook, patched for flow mode; legacy
-  `/loop` markers keep working unchanged during migration.
+  `/loop` markers keep working unchanged during migration. In flow
+  mode it also appends run-journal events (every gate exit — red ones
+  included, which exist nowhere else — plus one stop decision per
+  invocation) to `<feature-dir>/.flow-journal.jsonl`, fail-open:
+  journaling can never affect the gate's decision.
+- `bin/flow-eval.py` — reads journals across features and groups runs
+  into cohorts by flow version (content hash of the compiled twin):
+  per-gate exit histograms, first-pass rates, executions-to-green,
+  block-stops per agent node, human yields. The adaptation loop is
+  deliberately human-closed — the journal measures, you edit the YAML,
+  the lint compiles a new hash, the next runs form a new cohort to
+  compare. Nothing feeds back into a flow automatically.
 - `bin/attest.py` / `bin/ledger.py` — evidence recorded by the
   verifier into git notes; delivery state derived on request. Drift is
   caught at both levels: SUITE attest must sit on HEAD (commit-level)
@@ -67,16 +78,20 @@ downward.
 - `bin/floor-check.py` + `floors.yaml` — the dispatch floors as a
   mechanical diff scan on the patch road; an unresolvable base ref
   fails closed (exit 2), never shrinks the diff silently.
-- `commands/flow.md` — `/flow` arm · off · status · seal.
-- `tests/` — 63 tests here (walker + hook integration + evidence +
-  lint); the upstream loop-gate suite (21) passes against the patched
-  hook.
+- `commands/flow.md` — `/flow` arm · off · status · seal · eval.
+- `tests/` — 82 tests here (walker + hook integration + evidence +
+  lint + eval); the upstream loop-gate suite (21) passes against the
+  patched hook.
 
 Trust boundary, named: git notes, the marker
-(`tasks/.harness-loop.json`), and the compiled `.json` twins are
-tamper-resistant, not tamper-proof. The pretooluse guard should deny
-agent writes to all three (`git notes` outside `attest.py`/`seal.py`
-included); see the docstrings in `attest.py` and `hooks/loop-gate.py`.
+(`tasks/.harness-loop.json`), the compiled `.json` twins, and the run
+journal (`.flow-journal.jsonl`) are tamper-resistant, not tamper-proof.
+The pretooluse guard should deny agent writes to all four (`git notes`
+outside `attest.py`/`seal.py` included); see the docstrings in
+`attest.py` and `hooks/loop-gate.py`. The journal must also be
+GITIGNORED in the project (as `/flow` arm ensures): tracked, it would
+dirty the worktree mid-run and the ledger's clean-tree check could
+never pass.
 
 ## Runtime
 

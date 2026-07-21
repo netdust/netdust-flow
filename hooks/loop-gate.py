@@ -52,9 +52,11 @@ hook deliberately does not re-verify the marker's provenance: the gate
 is deterministic, the guard is the enforcement layer.
 """
 
+import hashlib
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -87,6 +89,39 @@ def trace(feature_dir: Path, event: str, cwd: Path, **kv) -> None:
         subprocess.run(args, capture_output=True, timeout=10, cwd=str(cwd))
     except Exception:
         pass  # fail-open: tracing must never affect the gate's decision
+
+
+def flow_traces(stdout: str) -> list[dict]:
+    """Collect the walker's `trace: {...}` lines (one per gate executed,
+    red exits included — the walker is the only component that sees
+    them). Malformed lines are dropped; the journal is best-effort."""
+    out = []
+    for line in stdout.splitlines():
+        if not line.startswith("trace: "):
+            continue
+        try:
+            ev = json.loads(line[len("trace: "):])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(ev, dict):
+            out.append(ev)
+    return out
+
+
+def journal(feature_dir: Path, base: dict, events: list[dict]) -> None:
+    """Fail-open journal append: one JSONL line per event into
+    <feature-dir>/.flow-journal.jsonl (gitignored runtime evidence,
+    read back by bin/flow-eval.py). Same rule as trace(): journaling
+    must NEVER affect the gate's decision, control flow, or stdout.
+    Trust boundary: the journal joins the marker, the compiled twins,
+    and git notes as a file the pretooluse guard should deny agents."""
+    try:
+        ts = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        with open(feature_dir / ".flow-journal.jsonl", "a") as f:
+            for ev in events:
+                f.write(json.dumps({"ts": ts, **base, **ev}) + "\n")
+    except Exception:
+        pass
 
 
 def read_progress(stdout: str) -> int | None:
@@ -151,13 +186,38 @@ def main() -> None:
                 flow_next = _line.split("next: ", 1)[1].strip()
                 break
 
+    jbase: dict = {}
+    gate_events: list[dict] = []
+    if flow_mode:
+        # run identity: minted at the first stop of an armed run and
+        # persisted in the marker, so every stop of one arming shares it
+        if not marker.get("run_id"):
+            marker["run_id"] = time.strftime("r%Y%m%d-%H%M%S")
+        try:
+            fhash = hashlib.sha256(flow_path.read_bytes()).hexdigest()[:12]
+        except Exception:
+            fhash = "unknown"
+        jbase = {"run": marker["run_id"], "flow": flow_path.stem,
+                 "fhash": fhash}
+        gate_events = flow_traces(check.stdout)
+
     if check.returncode == 0:
+        if flow_mode:
+            journal(feature_dir, jbase, gate_events + [
+                {"event": "stop", "verdict": "FINISHED",
+                 "decision": "disarm-finished", "node": "__end__",
+                 "iter": iteration}])
         marker_path.unlink(missing_ok=True)
         log(f"disarm reason=finished iter={iteration} cwd={cwd}")
         trace(feature_dir, "loop-disarm-finished", cwd=cwd, iteration=iteration)
         return
 
     if check.returncode == 2:
+        if flow_mode:
+            journal(feature_dir, jbase, gate_events + [
+                {"event": "stop", "verdict": "BLOCKED", "decision": "yield",
+                 "node": flow_next or str(flow_node), "iter": iteration,
+                 "reason": reason[:200]}])
         if flow_mode and flow_next:
             marker["node"] = flow_next
             marker_path.write_text(json.dumps(marker))
@@ -168,6 +228,11 @@ def main() -> None:
     # CONTINUE — apply guardrails, then block the stop.
     iteration += 1
     if iteration > max_iter:
+        if flow_mode:
+            journal(feature_dir, jbase, gate_events + [
+                {"event": "stop", "verdict": "CONTINUE",
+                 "decision": "disarm-budget",
+                 "node": flow_next or str(flow_node), "iter": iteration}])
         marker_path.unlink(missing_ok=True)
         log(f"disarm reason=budget-exhausted iter={iteration} max={max_iter}")
         trace(feature_dir, "loop-disarm-budget", cwd=cwd, iteration=iteration, max_iterations=max_iter)
@@ -181,6 +246,12 @@ def main() -> None:
             marker["dry"] = 0
         marker["last_done"] = done
         if marker["dry"] >= int(marker.get("max_dry", MAX_DRY)):
+            if flow_mode:
+                journal(feature_dir, jbase, gate_events + [
+                    {"event": "stop", "verdict": "CONTINUE",
+                     "decision": "disarm-dry",
+                     "node": flow_next or str(flow_node),
+                     "iter": iteration, "done": done}])
             marker_path.unlink(missing_ok=True)
             log(f"disarm reason=dry-loop iter={iteration} done={done}")
             # No ternary needed here (unlike the `block` trace call below):
@@ -194,6 +265,12 @@ def main() -> None:
     if flow_mode and flow_next:
         marker["node"] = flow_next
     marker_path.write_text(json.dumps(marker))
+    if flow_mode:
+        journal(feature_dir, jbase, gate_events + [
+            {"event": "stop", "verdict": "CONTINUE", "decision": "block",
+             "node": flow_next or str(flow_node), "iter": iteration,
+             "done": done, "dry": int(marker.get("dry", 0)),
+             "reason": reason[:200]}])
 
     log(f"block iter={iteration}/{max_iter} done={done} detail={reason!r}")
     trace(feature_dir, "loop-block", cwd=cwd,
