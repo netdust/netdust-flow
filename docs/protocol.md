@@ -50,8 +50,8 @@ evaluates or the walk blocks.
 | agent → agent / gate / human | allowed | — |
 | agent → `__end__` | **forbidden** — agents never finish | lint (I2, FAIL) |
 | gate → any declared node / `__end__` | allowed; every out-edge must consume `gate.exit` | lint (unconditional gate out-edge FAILs) |
-| human → gate | the I4 pattern: the decision re-enters as a seal read by the gate | convention (all shipped flows) |
-| human → `__end__` | machine-legal, protocol-deprecated: a finish should read recorded evidence — route human → seal gate → `__end__` | convention |
+| human → gate | the I4 pattern: the decision re-enters as a seal read by the gate | lint (any other human out-edge WARNs) |
+| human → `__end__` | machine-legal, protocol-deprecated: a finish should read recorded evidence — route human → seal gate → `__end__` | lint (WARN) |
 | any → `__human__` | deprecated absorbing state | lint (WARN) |
 | node with no out-edge | **forbidden** — `__end__` is the only final state | lint (I4, FAIL) |
 | several out-edges without `when` on all | **forbidden** — routing must be deterministic | lint (FAIL) |

@@ -12,7 +12,11 @@ Invariants it exists to enforce:
       has at least one outgoing edge — __end__ is the only final state.
       A dead-end node is a FAIL; an edge into the absorbing __human__
       pseudo-state is a WARN (prefer a human node with out-edges and a
-      seal gate — see bin/seal.py).
+      seal gate — see bin/seal.py). The seal pattern itself is linted
+      as WARNs (v0.3): a human node finishing directly, or routing
+      anywhere but a gate, is machine-legal but protocol-deprecated —
+      the decision should re-enter through a gate that reads the
+      recorded seal.
 
 Structural checks: flow.schema.json enforced (jsonschema, Draft
 2020-12 — catches typo'd keys via additionalProperties) · unique
@@ -165,6 +169,23 @@ def lint_file(path: Path, f: Findings) -> None:
         if kind.get(src) not in ("gate", "human"):
             f.fail("I2", f"{path.name}: __end__ reached from `{src}` "
                          f"(kind {kind.get(src)}) — only gate/human may finish")
+        elif kind.get(src) == "human":
+            f.warn("I4", f"{path.name}: human `{src}` finishes directly — "
+                         "machine-legal but protocol-deprecated: a finish "
+                         "should read recorded evidence (route the human to "
+                         "a seal gate, bin/seal.py check, and let the gate "
+                         "reach __end__)")
+
+    for src, es in out_edges.items():
+        if kind.get(src) != "human":
+            continue
+        for e in es:
+            dst = str(e["to"])
+            if kind.get(dst) is not None and kind.get(dst) != "gate":
+                f.warn("I4", f"{path.name}: human `{src}` routes to "
+                             f"{kind[dst]} `{dst}` — the decision should "
+                             "re-enter the machine through a gate that "
+                             "reads the recorded seal (bin/seal.py check)")
 
     for src, es in out_edges.items():
         if len(es) > 1:

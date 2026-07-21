@@ -85,6 +85,70 @@ def test_human_pseudo_state_warns_i4(tmp_path):
     assert "WARN" in out and "__human__" in out
 
 
+HUMAN_FLOW = """\
+flow: t
+version: 0
+state:
+  gate: {}
+nodes:
+  - id: work
+    kind: agent
+    craft: [agents/implementer]
+  - id: check
+    kind: gate
+    run: "true"
+  - id: decide
+    kind: human
+edges:
+  - {from: __start__, to: work}
+  - {from: work, to: check}
+  - {from: check, to: decide, when: gate.exit == 0}
+  - {from: check, to: work, when: gate.exit != 0}
+  - {from: decide, to: __end__}
+"""
+
+
+def test_human_direct_finish_warns_i4(tmp_path):
+    # machine-legal (I2 allows human -> __end__) but protocol-deprecated:
+    # a finish should read recorded evidence via a seal gate
+    rc, out = lint(tmp_path, HUMAN_FLOW)
+    assert rc == 0                     # WARN never fails the gate
+    assert "WARN" in out and "finishes directly" in out
+
+
+def test_human_to_non_gate_warns_i4(tmp_path):
+    # keep __end__ reachable (via the gate) while the human routes to
+    # an agent — the warned pattern, in an otherwise sound graph
+    warned = HUMAN_FLOW.replace(
+        "  - {from: check, to: decide, when: gate.exit == 0}",
+        "  - {from: check, to: __end__, when: gate.exit == 0}\n"
+        "  - {from: check, to: decide, when: gate.exit == 2}").replace(
+        "  - {from: decide, to: __end__}",
+        "  - {from: decide, to: work}")
+    rc, out = lint(tmp_path, warned)
+    assert rc == 0, out
+    assert "WARN" in out and "re-enter the machine through a gate" in out
+
+
+def test_human_to_seal_gate_is_clean(tmp_path):
+    # the I4 pattern: human -> gate -> __end__ produces no warnings
+    clean = HUMAN_FLOW.replace(
+        "  - {from: decide, to: __end__}",
+        """\
+  - {from: decide, to: gate-seal}
+  - {from: gate-seal, to: __end__, when: gate.exit == 0}
+  - {from: gate-seal, to: decide, when: gate.exit != 0}""").replace(
+        "  - id: decide\n    kind: human",
+        """\
+  - id: decide
+    kind: human
+  - id: gate-seal
+    kind: gate
+    run: "true\"""")
+    rc, out = lint(tmp_path, clean)
+    assert rc == 0 and "0 WARN" in out, out
+
+
 def test_unused_gate_result_fails(tmp_path):
     bad = VALID.replace("  - {from: check, to: __end__, when: gate.exit == 0}\n"
                         "  - {from: check, to: work, when: gate.exit != 0}\n",
