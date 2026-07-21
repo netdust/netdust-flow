@@ -66,3 +66,72 @@ preconditions rewritten (F1, I5 requirement) in `commands/flow.md`.
 **Open for next runs:** F2 watch; test-realism guidance (suite shims
 must mirror real-platform semantics where security-bearing — or run
 against the real platform).
+
+---
+
+## Run 0002 — r20260721-140229 · deliver@c5d0ea23260d
+
+**Delivered:** Netdust Forms v2 — the same form builder, rebuilt from
+the same approved spec under the post-run-0001 process. Same cohort
+hash as run 0001: the flow was unchanged; the process around it was
+not.
+**Method note:** same manual-stop drive as run 0001, but this time
+the craft was DISPATCHED, not just declared: the plan was produced by
+the `planner` craft as a fresh subagent; the T08/T09 reviews ran as
+independent fresh-context subagents using the real `security-sentinel`
+and `reviewer` definitions, their verdicts recorded as tree-bound
+evidence (`review-check.py`: report must say VERDICT: CLEAN and name
+the exact tree it reviewed — a review of last week's code proves
+nothing about today's).
+
+**Eval (vs run 0001, same cohort):**
+
+    run 0001: 10 stops · 7 iters · red-gates 3/8 · ledger mean-to-green 4.0
+    run 0002:  8 stops · 5 iters · red-gates 1/6 · ledger mean-to-green 2.0
+    both: 2 human yields · disarm-finished · zero overrides
+
+**I5, executed for the first time:** the plan gate (v2 project gate
+command) mechanically required a review cluster — it would have
+REFUSED run 0001's plan. T02 made test realism a task of its own:
+shims that mirror real platform semantics (slashed POST bodies,
+strict `sanitize_email`, slashing-aware meta/post writers, insert
+failure), self-tested so shim drift is itself a red check.
+
+**The headline event — an attested review caught a live defect:**
+the wp-semantics reviewer returned VERDICT: FINDINGS on a defect the
+author did not know about (submission `post_title` passed to
+`wp_insert_post` unslashed — the same slashing class as run 0001's
+escape #1, at a call site the suite didn't model). The red verdict
+BLOCKED T09's attest; the fix landed with a shim improvement and a
+regression check; both reviewers re-verified the diff and re-staked
+CLEAN on the new tree; only then did the attest pass. In run 0001
+this would have been escape #9. In run 0002 it is a caught-in-flow
+finding with a complete audit trail. That is invariant I5's designed
+behavior, observed once in production.
+
+**Escaped defects: 0 known at seal time — stated carefully.** The
+in-flow reviews are part of the process, so they don't count as the
+post-seal audit that produced run 0001's number. The honest
+comparison requires a later, independent post-seal review (ideally
+after real deployment). Contamination caveat, recorded up front: the
+author carried run 0001's answer key, so non-recurrence of the known
+eight classes is NOT process-attributable. The T09 catch IS — the
+defect was unknown to the author and was found by the attested
+review, which is the only clean signal this run could produce, and it
+produced it.
+
+**Findings:**
+
+- **F5 (tool defect, fixed this entry):** `flow-eval` crashed with
+  BrokenPipeError when its report was piped into `head`. Fixed
+  (SIGPIPE default).
+- **F6 (boundary, open):** review reports are gitignored working
+  papers; the durable evidence is the attest note recording that
+  `review-check` passed against a named tree. Acceptable — same
+  status as the journal — but the report content itself dies with the
+  workspace. If report retention ever matters, they need a store.
+- **F7 (observation):** in-flow review verdicts arriving AFTER a code
+  fix require re-review of the new tree; the tree-binding forced the
+  correct behavior automatically. The freshness mechanism deferred
+  for seals ("stricter freshness is deferred until a drill shows a
+  leak") has now been drilled for reviews, and it held.

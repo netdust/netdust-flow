@@ -30,9 +30,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import sys
 from collections import Counter
 from pathlib import Path
+
+# a report piped into `head` must truncate quietly, not traceback
+signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 
 def load(paths: list[Path]) -> list[tuple[str, dict]]:
