@@ -54,8 +54,9 @@ nodes:
     kind: gate
     run: "{netdust_flow}/bin/seal.py check {feature_dir} approve-plan"
 
-  - id: build             # loop body — review clusters are ledger tasks;
-    kind: agent           # subagent-stop gates tests per task, unchanged
+  - id: build             # loop body — review clusters are ledger tasks
+    kind: agent           # (I5: a review that is not a ledger task did
+                          # not happen); subagent-stop gates per task
     craft:
       - agents/implementer
       - agents/test-author

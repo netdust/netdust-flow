@@ -23,7 +23,7 @@ Dispatch floors route work: anything touching auth, user input,
 schema/migrations, or payments takes `deliver` — no agent override
 downward.
 
-## Invariants (enforced by `bin/flow-lint.py`)
+## Invariants
 
 - **I1** — every edge condition is machine-readable: `<state key> <op>
   <literal>`. Prose conditions fail the lint.
@@ -42,6 +42,21 @@ downward.
   gate that follows it. Resuming a session is never approval;
   rejection travels its own edge. This is I3 applied to humans: a
   decision nobody recorded is not a state signal either.
+- **I5** (v0.3, from run 0001) — craft that matters is evidence: a
+  review that is not a ledger task did not happen. A node's `craft`
+  list is prose to the driving agent — nothing mechanical notices
+  when it is skipped, which makes "I used the declared craft" exactly
+  the kind of assertion I3 forbids trusting. Gates judge outputs, so
+  craft whose absence shows up in a check is already covered;
+  independent review is not — its absence is invisible to every gate.
+  Therefore deliver plans must carry a review cluster: task(s) whose
+  check IS an attested independent review run, refused by the plan
+  gate when missing. Enforced by the project's gate command and the
+  ledger, not the lint (a flow file cannot see plan content).
+
+I1, I2, and I4's shape are enforced by `bin/flow-lint.py`; I3 by the
+attest/ledger design; I5 by the plan gate + ledger. The run ledger
+(`docs/RUNS.md`) records the delivery that motivated I5.
 
 ## Parts
 
@@ -79,6 +94,9 @@ downward.
   mechanical diff scan on the patch road; an unresolvable base ref
   fails closed (exit 2), never shrinks the diff silently.
 - `commands/flow.md` — `/flow` arm · off · status · seal · eval.
+- `docs/RUNS.md` — the run ledger: one entry per flow-driven
+  delivery — outcome, eval stats, findings, and the adaptations they
+  forced. THEORY.md argues; this file measures.
 - `tests/` — 82 tests here (walker + hook integration + evidence +
   lint + eval); the upstream loop-gate suite (21) passes against the
   patched hook.

@@ -23,28 +23,39 @@ Preconditions — refuse to arm (say why) if any fails:
    — exit 0 required (needs PyYAML + jsonschema, authoring-side only).
    The walker reads the `.json` twin; a stale or FAIL-ing flow must
    never drive a run.
-2. **deliver only — the graft:** `<feature-dir>/tasks.md` exists with
-   `- [ ] Tnn` lines, and the project defines the spec/plan gate
-   command (`Gate check:` line in the project CLAUDE.md, or ask the
-   human once) — bound as `gate_check_cmd`, it drives `gate-spec` and
-   `gate-plan`. Running it against `<feature-dir>` must exit 0 before
-   arming: a walker on a gate-failing plan grinds a defective plan.
-   No gate command → no spec/plan gates → refuse.
-3. **patch only — bindings:** the project defines the suite command
+2. **deliver — the gate command:** the project defines the spec/plan
+   gate command (`Gate check:` line in the project CLAUDE.md, or ask
+   the human once) — bound as `gate_check_cmd`, it drives `gate-spec`
+   and `gate-plan`. No gate command → no spec/plan gates → refuse.
+3. **deliver, arming mid-flow only:** when arming at a node past
+   `plan` (grafting onto an existing plan), `<feature-dir>/tasks.md`
+   must exist with `- [ ] Tnn` lines and the gate command must exit 0
+   first — a walker on a gate-failing plan grinds a defective plan.
+   Arming at `__start__` needs neither: the flow itself produces spec
+   and plan and gates them on the way. (Run 0001 finding F1: the old
+   precondition demanded tasks.md for every deliver arm, which a
+   from-scratch run cannot satisfy.)
+4. **deliver — review is evidence (I5):** the plan must carry a
+   review cluster — at least one task whose check IS an independent
+   review run, attested like any other task (e.g. `T08 independent
+   review: security + correctness`). A reviewer that is not a ledger
+   task did not happen (run 0001 finding F4); the project's gate
+   command should FAIL a tasks.md without one.
+5. **patch only — bindings:** the project defines the suite command
    (`Test suite:` line in the project CLAUDE.md, or ask the human once).
    No suite command → no exit gate → refuse. Floors are no longer
    convention: gate-floors scans the real diff on the way out and
    routes floor-touching work to you for re-dispatch to deliver.
-4. **deliver — evidence, not checkboxes:** completion derives from git
+6. **deliver — evidence, not checkboxes:** completion derives from git
    attest notes (bin/attest.py records; bin/ledger.py answers).
    Checkbox state in tasks.md is a display mirror the ledger ignores;
    agents attest units by running their checks through attest.py.
 
 Then:
 
-4. Read `Loop budget: ~N` from `<feature-dir>/plan.md` when present;
+1. Read `Loop budget: ~N` from `<feature-dir>/plan.md` when present;
    default 25.
-5. Write `tasks/.harness-loop.json`:
+2. Write `tasks/.harness-loop.json`:
 
    ```
    {"feature_dir": "<feature-dir>", "iteration": 0, "max_iterations": N,
@@ -62,12 +73,12 @@ Then:
    (patch has no tasks.md, so its `progress:` line is node-based and
    nearly constant — `max_dry: 25` hands termination to the iteration
    budget instead of the dry-loop counter. deliver keeps the default 2.)
-6. Ensure `.gitignore` contains `tasks/.harness-loop.json` AND
+3. Ensure `.gitignore` contains `tasks/.harness-loop.json` AND
    `.flow-journal.jsonl` (the hook appends run-journal events to
    `<feature-dir>/.flow-journal.jsonl`; tracked, it would dirty the
    worktree mid-run and the ledger's clean-tree check could never
    pass).
-7. Confirm to the user in two lines: armed, flow, budget, and how it
+4. Confirm to the user in two lines: armed, flow, budget, and how it
    ends (FINISHED at a gate → disarms · human node → yields with the
    ask · budget/dry → disarms · `/flow off` anytime).
 
