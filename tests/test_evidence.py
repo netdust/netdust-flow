@@ -161,6 +161,20 @@ def test_seal_nodes_are_independent(repo):
     assert rc == 1
 
 
+def test_seals_are_scoped_by_feature(repo):
+    # a multi-feature repo: another feature's human node reuses the same
+    # name (shakeout) — its `approved` must NOT satisfy this feature's
+    # seal check, or one person's decision finishes a flow they never
+    # looked at (I4 broken at its core)
+    seal(repo, "record", "specs/other", "shakeout", "approved")
+    rc, out = seal(repo, "check", "specs/demo", "shakeout")
+    assert rc == 1 and "absent" in out, out           # NOT approved
+    # this feature's own seal is honored
+    seal(repo, "record", "specs/demo", "shakeout", "approved")
+    rc, _ = seal(repo, "check", "specs/demo", "shakeout")
+    assert rc == 0
+
+
 def test_seal_invalid_decision_records_nothing(repo):
     rc, out = seal(repo, "record", "specs/demo", "approve-plan", "maybe")
     assert rc == 2

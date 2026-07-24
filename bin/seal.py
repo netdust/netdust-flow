@@ -86,7 +86,7 @@ def record(feature_dir: str, node: str, decision: str, note: str,
     return 0
 
 
-def check(node: str, cwd: Path) -> int:
+def check(node: str, feature: str, cwd: Path) -> int:
     rc, reach = sh("git", "rev-list", "HEAD", cwd=cwd)
     if rc != 0:
         print(f"SEAL: absent — {node} (not a git repository)")
@@ -99,6 +99,15 @@ def check(node: str, cwd: Path) -> int:
             noted.add(parts[1])
     # rev-list is newest-first; the first noted commit holds the freshest
     # records, and within one note body the last matching line wins.
+    #
+    # Seals are scoped by FEATURE: in a repo that delivers more than one
+    # feature on the same branch, human nodes reuse the same names
+    # (shakeout, approve-plan, …), so a decision recorded for one
+    # feature must never satisfy another's — that would be one person's
+    # `approved` finishing a flow they never looked at (I4 violated at
+    # its core). A record whose feature differs is skipped; a legacy
+    # record with no feature field is unscoped and cannot be trusted to
+    # belong here, so it does not count.
     for commit in reach.split():
         if commit not in noted:
             continue
@@ -115,7 +124,8 @@ def check(node: str, cwd: Path) -> int:
                 rec = json.loads(raw)
             except json.JSONDecodeError:
                 continue
-            if rec.get("unit") == "seal" and rec.get("node") == node:
+            if (rec.get("unit") == "seal" and rec.get("node") == node
+                    and rec.get("feature") == feature):
                 latest = rec
         if latest is not None:
             decision = latest.get("decision")
@@ -143,7 +153,7 @@ def main() -> int:
     if args.mode == "record":
         return record(args.feature_dir, args.node, args.decision,
                       args.note, cwd)
-    return check(args.node, cwd)
+    return check(args.node, args.feature_dir, cwd)
 
 
 if __name__ == "__main__":
