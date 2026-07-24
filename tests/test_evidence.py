@@ -218,6 +218,24 @@ def test_feature_scope_normalizes_relative_vs_absolute(repo):
     assert "done=1" in p.stdout, p.stdout
 
 
+def test_seal_fresh_flags_drift(repo):
+    # a judgment-bearing seal (send/publish/sign) must go STALE when the
+    # sealed content tree changes afterwards (F2). --fresh enforces it;
+    # the default stays latest-wins.
+    seal(repo, "record", "specs/demo", "shakeout", "approved")
+    rc, _ = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 0                                # sealed on the current tree
+    (repo / "a.txt").write_text("v2 — content drift after the seal\n")
+    sh("git", "commit", "-am", "drift", cwd=repo)
+    rc, out = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 1 and "stale" in out            # drift caught → re-ask human
+    rc, _ = seal(repo, "check", "specs/demo", "shakeout")
+    assert rc == 0                                # default is still latest-wins
+    seal(repo, "record", "specs/demo", "shakeout", "approved")  # re-seal
+    rc, _ = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 0                                # fresh again on the new tree
+
+
 def test_seal_invalid_decision_records_nothing(repo):
     rc, out = seal(repo, "record", "specs/demo", "approve-plan", "maybe")
     assert rc == 2

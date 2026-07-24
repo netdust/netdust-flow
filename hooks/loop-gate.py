@@ -51,6 +51,7 @@ cost of the obvious tamper.
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -164,9 +165,14 @@ def main() -> None:
             break
 
     # run identity: minted at the first stop of an armed run and
-    # persisted in the marker, so every stop of one arming shares it
+    # persisted in the marker, so every stop of one arming shares it.
+    # A random suffix keeps it unique when two runs arm in the same
+    # second (F1: the timestamp alone is second-granular, so concurrent
+    # same-domain runs would otherwise collide on run_id and lean the
+    # whole scoping story on feature-scope alone).
     if not marker.get("run_id"):
-        marker["run_id"] = time.strftime("r%Y%m%d-%H%M%S")
+        marker["run_id"] = (time.strftime("r%Y%m%d-%H%M%S")
+                            + "-" + os.urandom(2).hex())
     try:
         fhash = hashlib.sha256(flow_path.read_bytes()).hexdigest()[:12]
     except Exception:

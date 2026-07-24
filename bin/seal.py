@@ -31,8 +31,14 @@ Flows wire it as a gate after each human node:
 
 Freshness model, stated honestly: latest-wins means an approval can go
 stale if the sealed artifact changes afterwards without a re-seal. The
-record carries the tree hash for audit; requiring seal-on-current-tree
-is deferred as ceremony until a drill shows a leak. Tamper boundary is
+record carries the tree hash; `check --fresh` opts into enforcing it —
+a seal whose recorded tree differs from the current HEAD tree counts as
+NO_SEAL, so a drifted judgment-bearing final (send/publish/sign) re-asks
+the human instead of riding a stale approval (F2). Default stays
+latest-wins (cheap); flows wire --fresh on the gates that finish
+irreversible work. It requires the record to be committed — with an
+uncommitted worktree the tree does not move, so --fresh is a no-op
+(honest, not a false pass). Tamper boundary is
 attest.py's: git notes are tamper-resistant, not tamper-proof —
 hooks/pretooluse-guard.py denies agent-issued `git notes` writes, so
 attest.py/seal.py (which write inside their own process) stay the
@@ -116,9 +122,13 @@ def record(feature_dir: str, node: str, decision: str, note: str,
     return 0
 
 
-def check(node: str, feature: str, cwd: Path) -> int:
+def check(node: str, feature: str, cwd: Path, fresh: bool = False) -> int:
     want = canon_feature(feature, cwd)
     want_run = current_run(cwd)   # None when standalone → feature-only
+    head_tree = None
+    if fresh:
+        rc_t, head_tree = sh("git", "rev-parse", "HEAD^{tree}", cwd=cwd)
+        head_tree = head_tree.strip() if rc_t == 0 else None
     rc, reach = sh("git", "rev-list", "HEAD", cwd=cwd)
     if rc != 0:
         print(f"SEAL: absent — {node} (not a git repository)")
@@ -164,6 +174,21 @@ def check(node: str, feature: str, cwd: Path) -> int:
         if latest is not None:
             decision = latest.get("decision")
             code = DECISIONS.get(decision, NO_SEAL)
+            # Freshness (F2): a judgment-bearing seal (send/publish/sign)
+            # must not keep approving content that changed after it was
+            # sealed. In --fresh mode a seal whose recorded tree differs
+            # from the current HEAD tree is STALE — it counts as no seal
+            # (NO_SEAL), so the finishing gate re-asks the human for a
+            # decision on what the record now says. Requires the record
+            # to be committed (git history is the provenance); with an
+            # uncommitted worktree the tree does not move and --fresh is
+            # a no-op, which is honest, not a false pass.
+            if (fresh and head_tree is not None
+                    and latest.get("tree") != head_tree):
+                print(f"SEAL: stale — {node} was sealed `{decision}` on "
+                      f"tree {str(latest.get('tree'))[:12]} but HEAD is "
+                      f"{head_tree[:12]} — re-seal after changes")
+                return NO_SEAL
             print(f"SEAL: {decision} — {node} (recorded {latest.get('ts')})")
             return code
     print(f"SEAL: absent — {node} needs a human decision "
@@ -182,12 +207,15 @@ def main() -> int:
     chk = sub.add_parser("check")
     chk.add_argument("feature_dir")
     chk.add_argument("node")
+    chk.add_argument("--fresh", action="store_true",
+                     help="a seal on a drifted tree counts as stale "
+                          "(NO_SEAL) — for judgment-bearing finals")
     args = ap.parse_args()
     cwd = Path.cwd()
     if args.mode == "record":
         return record(args.feature_dir, args.node, args.decision,
                       args.note, cwd)
-    return check(args.node, args.feature_dir, cwd)
+    return check(args.node, args.feature_dir, cwd, fresh=args.fresh)
 
 
 if __name__ == "__main__":

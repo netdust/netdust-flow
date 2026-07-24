@@ -149,6 +149,24 @@ def test_journal_records_red_gate_and_block_stop(tmp_path):
     assert marker_of(cwd)["run_id"] == stops[-1]["run"]
 
 
+def test_run_id_unique_across_concurrent_runs(tmp_path):
+    # two runs armed in the same second must get DISTINCT run ids (F1):
+    # the timestamp is second-granular, so without a suffix concurrent
+    # same-domain runs collide and feature-scope carries the whole load.
+    import re
+    ids = set()
+    for i in range(2):
+        root = tmp_path / f"run{i}"
+        root.mkdir()
+        home, cwd = setup(root, PATCH, "build",
+                          binds={"test_suite_cmd": suite(tmp_path, 1)})
+        run_gate(cwd, home)
+        rid = marker_of(cwd)["run_id"]
+        assert re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", rid), rid
+        ids.add(rid)
+    assert len(ids) == 2  # distinct even if minted within the same second
+
+
 def test_journal_run_id_stable_across_stops(tmp_path):
     home, cwd = setup(tmp_path, PATCH, "build",
                       binds={"test_suite_cmd": suite(tmp_path, 1)})
