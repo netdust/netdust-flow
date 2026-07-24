@@ -49,6 +49,26 @@ def seal(cwd, *args):
     return p.returncode, p.stdout
 
 
+def test_attests_are_scoped_by_feature(repo):
+    # a multi-feature repo: another feature attests the SAME unit ids
+    # on the same branch — they must NOT satisfy this feature's tasks
+    (repo / "specs" / "other").mkdir(parents=True)
+    (repo / "specs" / "other" / "tasks.md").write_text("- [ ] T01 x\n")
+    sh("git", "add", "-A", cwd=repo)
+    sh("git", "commit", "-m", "other feature", cwd=repo)
+    sh(sys.executable, str(ATTEST), "specs/other", "T01", "--",
+       sys.executable, "-c", "import sys; sys.exit(0)", cwd=repo)
+    sh(sys.executable, str(ATTEST), "specs/other", "T02", "--",
+       sys.executable, "-c", "import sys; sys.exit(0)", cwd=repo)
+    # specs/demo has attested NOTHING — its ledger must still show 0 done
+    rc, out = ledger(repo)
+    assert rc == 1 and "done=0 total=2" in out, out
+    # and once demo attests its own T01, only that counts
+    attest(repo, "T01", 0)
+    rc, out = ledger(repo)
+    assert "done=1 total=2" in out, out
+
+
 def test_failed_check_records_nothing(repo):
     p = attest(repo, "T01", 1)
     assert p.returncode == 1 and "nothing recorded" in p.stdout

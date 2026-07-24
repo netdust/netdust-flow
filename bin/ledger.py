@@ -57,9 +57,17 @@ def tasks_of(feature_dir: Path) -> list[tuple[str, bool]]:
     return out
 
 
-def evidence(cwd: Path) -> tuple[set[str], set[str]]:
+def evidence(cwd: Path, feature: str) -> tuple[set[str], set[str]]:
     """Returns (units attested on any reachable commit,
-                units attested on HEAD itself)."""
+                units attested on HEAD itself) FOR THIS FEATURE.
+
+    Attests are scoped by their recorded `feature` field: in a repo
+    that delivers more than one feature on the same branch, every
+    feature reuses the task ids T01, T02, … , so counting units
+    globally would let one feature's `T08` satisfy another's. The
+    feature field exists exactly to prevent that; honor it. A note
+    without a feature field is legacy/unscoped and cannot be trusted
+    to belong to this feature, so it does not count."""
     rc, head = sh("git", "rev-parse", "HEAD", cwd=cwd)
     if rc != 0:
         return set(), set()
@@ -88,7 +96,8 @@ def evidence(cwd: Path) -> tuple[set[str], set[str]]:
                 rec = json.loads(raw)
             except json.JSONDecodeError:
                 continue
-            if rec.get("exit") == 0 and rec.get("unit"):
+            if (rec.get("exit") == 0 and rec.get("unit")
+                    and rec.get("feature") == feature):
                 anywhere.add(rec["unit"])
                 if target == head:
                     on_head.add(rec["unit"])
@@ -103,7 +112,7 @@ def main() -> int:
     cwd = Path.cwd()
 
     tasks = tasks_of(feature_dir)
-    attested, on_head = evidence(cwd)
+    attested, on_head = evidence(cwd, str(feature_dir))
     done = [t for t, _ in tasks if t in attested]
     missing = [(t, h) for t, h in tasks if t not in attested]
 
