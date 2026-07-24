@@ -26,12 +26,28 @@ stdout carries the walker-gate contract:
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 NOTES_REF = "refs/notes/attest"
+
+
+def canon_feature(feature: str, cwd: Path) -> str:
+    """Canonicalize a feature path so scoping compares the SAME thing
+    regardless of how it was written. attest.py/seal.py record the
+    feature as passed (usually relative, `specs/x`), while the Stop
+    hook drives gates with an ABSOLUTE feature_dir — exact-string
+    comparison would spuriously mismatch. Normalize both sides to the
+    path relative to the repo root (cwd here)."""
+    p = Path(feature)
+    absolute = p if p.is_absolute() else cwd / p
+    try:
+        return os.path.relpath(absolute.resolve(), cwd.resolve())
+    except ValueError:
+        return str(absolute)
 TASK_RE = re.compile(r"^- \[( |x|X)\] (T\d+)\b(.*)$")
 
 
@@ -72,6 +88,7 @@ def evidence(cwd: Path, feature: str) -> tuple[set[str], set[str]]:
     if rc != 0:
         return set(), set()
     head = head.strip()
+    want = canon_feature(feature, cwd)
     rc, reach = sh("git", "rev-list", "HEAD", cwd=cwd)
     reachable = set(reach.split())
     rc, listing = sh("git", "notes", f"--ref={NOTES_REF}", "list", cwd=cwd)
@@ -97,7 +114,8 @@ def evidence(cwd: Path, feature: str) -> tuple[set[str], set[str]]:
             except json.JSONDecodeError:
                 continue
             if (rec.get("exit") == 0 and rec.get("unit")
-                    and rec.get("feature") == feature):
+                    and rec.get("feature") is not None
+                    and canon_feature(rec["feature"], cwd) == want):
                 anywhere.add(rec["unit"])
                 if target == head:
                     on_head.add(rec["unit"])

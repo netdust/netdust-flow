@@ -42,12 +42,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
 from subprocess import run as _run
 
 NOTES_REF = "refs/notes/seal"
+
+
+def canon_feature(feature: str, cwd: Path) -> str:
+    """Canonicalize a feature path so scoping compares the same thing
+    whether the decision was recorded with a relative path (`specs/x`,
+    as a human types it) or checked with the absolute feature_dir the
+    Stop hook drives gates with. Normalize both to repo-root-relative."""
+    p = Path(feature)
+    absolute = p if p.is_absolute() else cwd / p
+    try:
+        return os.path.relpath(absolute.resolve(), cwd.resolve())
+    except ValueError:
+        return str(absolute)
 DECISIONS = {"approved": 0, "rejected": 2}
 NO_SEAL = 1
 
@@ -87,6 +101,7 @@ def record(feature_dir: str, node: str, decision: str, note: str,
 
 
 def check(node: str, feature: str, cwd: Path) -> int:
+    want = canon_feature(feature, cwd)
     rc, reach = sh("git", "rev-list", "HEAD", cwd=cwd)
     if rc != 0:
         print(f"SEAL: absent — {node} (not a git repository)")
@@ -125,7 +140,8 @@ def check(node: str, feature: str, cwd: Path) -> int:
             except json.JSONDecodeError:
                 continue
             if (rec.get("unit") == "seal" and rec.get("node") == node
-                    and rec.get("feature") == feature):
+                    and rec.get("feature") is not None
+                    and canon_feature(rec["feature"], cwd) == want):
                 latest = rec
         if latest is not None:
             decision = latest.get("decision")

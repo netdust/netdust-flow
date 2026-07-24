@@ -175,6 +175,19 @@ def test_seals_are_scoped_by_feature(repo):
     assert rc == 0
 
 
+def test_feature_scope_normalizes_relative_vs_absolute(repo):
+    # the Stop hook drives gates with an ABSOLUTE feature_dir while a
+    # human records with a relative one — scoping must see them as the
+    # same feature, or a real seal/attest is invisible to its own gate
+    abs_fd = str(repo / "specs" / "demo")
+    seal(repo, "record", "specs/demo", "approve-plan", "approved")
+    rc, _ = seal(repo, "check", abs_fd, "approve-plan")   # absolute check
+    assert rc == 0, "absolute-path check must match a relative-path seal"
+    attest(repo, "T01", 0)                                 # relative attest
+    p = sh(sys.executable, str(LEDGER), abs_fd, cwd=repo)  # absolute ledger
+    assert "done=1" in p.stdout, p.stdout
+
+
 def test_seal_invalid_decision_records_nothing(repo):
     rc, out = seal(repo, "record", "specs/demo", "approve-plan", "maybe")
     assert rc == 2
