@@ -69,6 +69,36 @@ def test_attests_are_scoped_by_feature(repo):
     assert "done=1 total=2" in out, out
 
 
+def _arm(cwd, run_id):
+    """Write a minimal marker so attest/seal/ledger see an armed run."""
+    (cwd / "tasks").mkdir(exist_ok=True)
+    (cwd / "tasks" / ".harness-loop.json").write_text(
+        json.dumps({"feature_dir": "specs/demo", "run_id": run_id}))
+
+
+def test_replan_does_not_inherit_prior_run_evidence(repo):
+    # run 1: attest T01 and seal approve-plan under run r1
+    _arm(repo, "r1")
+    attest(repo, "T01", 0)
+    seal(repo, "record", "specs/demo", "approve-plan", "approved")
+    rc, out = ledger(repo)
+    assert "done=1 total=2" in out
+    # re-plan: same feature, same task ids, NEW run id r2. The prior
+    # run's T01 attest and approve-plan seal must NOT carry over.
+    _arm(repo, "r2")
+    rc, out = ledger(repo)
+    assert "done=0 total=2" in out, out          # r1's T01 does not count
+    rc, _ = seal(repo, "check", "specs/demo", "approve-plan")
+    assert rc == 1                                # r1's seal does not advance r2
+    # r2 records its own evidence, which does count
+    attest(repo, "T01", 0)
+    seal(repo, "record", "specs/demo", "approve-plan", "approved")
+    rc, out = ledger(repo)
+    assert "done=1 total=2" in out
+    rc, _ = seal(repo, "check", "specs/demo", "approve-plan")
+    assert rc == 0
+
+
 def test_failed_check_records_nothing(repo):
     p = attest(repo, "T01", 1)
     assert p.returncode == 1 and "nothing recorded" in p.stdout

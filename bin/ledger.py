@@ -33,6 +33,19 @@ import sys
 from pathlib import Path
 
 NOTES_REF = "refs/notes/attest"
+MARKER_REL = Path("tasks") / ".harness-loop.json"
+
+
+def current_run(cwd: Path) -> str | None:
+    """Run id of the armed flow, if any — evidence is scoped to it so a
+    re-plan (new run id, same feature + task ids) cannot inherit the
+    prior run's attests. When no flow is armed (standalone ledger),
+    returns None and scoping falls back to feature-only (display)."""
+    try:
+        return (json.loads((cwd / MARKER_REL).read_text()).get("run_id")
+                or None)
+    except Exception:
+        return None
 
 
 def canon_feature(feature: str, cwd: Path) -> str:
@@ -48,6 +61,8 @@ def canon_feature(feature: str, cwd: Path) -> str:
         return os.path.relpath(absolute.resolve(), cwd.resolve())
     except ValueError:
         return str(absolute)
+
+
 TASK_RE = re.compile(r"^- \[( |x|X)\] (T\d+)\b(.*)$")
 
 
@@ -89,6 +104,7 @@ def evidence(cwd: Path, feature: str) -> tuple[set[str], set[str]]:
         return set(), set()
     head = head.strip()
     want = canon_feature(feature, cwd)
+    want_run = current_run(cwd)   # None when standalone → feature-only
     rc, reach = sh("git", "rev-list", "HEAD", cwd=cwd)
     reachable = set(reach.split())
     rc, listing = sh("git", "notes", f"--ref={NOTES_REF}", "list", cwd=cwd)
@@ -115,7 +131,8 @@ def evidence(cwd: Path, feature: str) -> tuple[set[str], set[str]]:
                 continue
             if (rec.get("exit") == 0 and rec.get("unit")
                     and rec.get("feature") is not None
-                    and canon_feature(rec["feature"], cwd) == want):
+                    and canon_feature(rec["feature"], cwd) == want
+                    and (want_run is None or rec.get("run") == want_run)):
                 anywhere.add(rec["unit"])
                 if target == head:
                     on_head.add(rec["unit"])

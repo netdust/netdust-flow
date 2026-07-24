@@ -38,6 +38,20 @@ import time
 from pathlib import Path
 
 NOTES_REF = "refs/notes/attest"
+MARKER_REL = Path("tasks") / ".harness-loop.json"
+
+
+def current_run(cwd: Path) -> str | None:
+    """The run id of the armed flow, if any (minted by the Stop hook,
+    persisted in the marker). Evidence records it so a re-plan — which
+    re-arms with a NEW run id but the SAME feature and task ids —
+    cannot inherit the prior run's attests. Same run-scoping the
+    journal already uses."""
+    try:
+        return (json.loads((cwd / MARKER_REL).read_text()).get("run_id")
+                or None)
+    except Exception:
+        return None
 
 
 def git(*args: str, cwd: Path) -> str:
@@ -74,6 +88,9 @@ def main() -> int:
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "tree": git("rev-parse", "HEAD^{tree}", cwd=cwd),
     }
+    run = current_run(cwd)
+    if run:
+        record["run"] = run
     git("notes", f"--ref={NOTES_REF}", "append", "-m",
         json.dumps(record), "HEAD", cwd=cwd)
     head = git("rev-parse", "--short", "HEAD", cwd=cwd)

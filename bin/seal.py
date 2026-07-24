@@ -49,6 +49,19 @@ from pathlib import Path
 from subprocess import run as _run
 
 NOTES_REF = "refs/notes/seal"
+MARKER_REL = Path("tasks") / ".harness-loop.json"
+
+
+def current_run(cwd: Path) -> str | None:
+    """Run id of the armed flow, if any — seals are scoped to it so a
+    re-plan (new run id, same feature + human node names) cannot be
+    advanced by the prior run's decision. Standalone → None → the
+    check falls back to feature-only."""
+    try:
+        return (json.loads((cwd / MARKER_REL).read_text()).get("run_id")
+                or None)
+    except Exception:
+        return None
 
 
 def canon_feature(feature: str, cwd: Path) -> str:
@@ -90,6 +103,9 @@ def record(feature_dir: str, node: str, decision: str, note: str,
     }
     if note:
         body["note"] = note
+    run = current_run(cwd)
+    if run:
+        body["run"] = run
     rc, _ = sh("git", "notes", f"--ref={NOTES_REF}", "append", "-m",
                json.dumps(body), "HEAD", cwd=cwd)
     if rc != 0:
@@ -102,6 +118,7 @@ def record(feature_dir: str, node: str, decision: str, note: str,
 
 def check(node: str, feature: str, cwd: Path) -> int:
     want = canon_feature(feature, cwd)
+    want_run = current_run(cwd)   # None when standalone → feature-only
     rc, reach = sh("git", "rev-list", "HEAD", cwd=cwd)
     if rc != 0:
         print(f"SEAL: absent — {node} (not a git repository)")
@@ -141,7 +158,8 @@ def check(node: str, feature: str, cwd: Path) -> int:
                 continue
             if (rec.get("unit") == "seal" and rec.get("node") == node
                     and rec.get("feature") is not None
-                    and canon_feature(rec["feature"], cwd) == want):
+                    and canon_feature(rec["feature"], cwd) == want
+                    and (want_run is None or rec.get("run") == want_run)):
                 latest = rec
         if latest is not None:
             decision = latest.get("decision")
