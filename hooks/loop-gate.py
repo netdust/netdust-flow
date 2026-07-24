@@ -41,12 +41,12 @@ the marker survives (CONTINUE and BLOCKED).
 Trust boundary (named, v0.2): the marker file IS the persisted machine
 state, and it is writable by anything with filesystem access — an agent
 could rewrite "node", swap "flow", or neuter "binds" exactly as easily
-as forging a git note. The same pretooluse guard that protects
-`git notes` (see attest.py) should deny agent writes to
-tasks/.harness-loop.json, to the compiled flows/*.json twins, and to
-the run journal (.flow-journal.jsonl). This hook deliberately does not
-re-verify the marker's provenance: the gate is deterministic, the
-guard is the enforcement layer.
+as forging a git note. hooks/pretooluse-guard.py denies the direct
+forge of the twins and journal (and `git notes` writes); the marker
+is left editable on purpose, since arming writes it — that residue is
+named in the guard. This hook deliberately does not re-verify the
+marker's provenance: the gate is deterministic, the guard raises the
+cost of the obvious tamper.
 """
 
 import hashlib
@@ -95,8 +95,8 @@ def journal(feature_dir: Path, base: dict, events: list[dict]) -> None:
     <feature-dir>/.flow-journal.jsonl (gitignored runtime evidence,
     read back by bin/flow-eval.py). Same rule as trace(): journaling
     must NEVER affect the gate's decision, control flow, or stdout.
-    Trust boundary: the journal joins the marker, the compiled twins,
-    and git notes as a file the pretooluse guard should deny agents."""
+    Trust boundary: the journal joins the compiled twins and git notes
+    as files hooks/pretooluse-guard.py denies agents from hand-writing."""
     try:
         ts = time.strftime("%Y-%m-%dT%H:%M:%S%z")
         with open(feature_dir / ".flow-journal.jsonl", "a") as f:

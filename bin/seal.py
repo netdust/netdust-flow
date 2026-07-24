@@ -33,8 +33,10 @@ Freshness model, stated honestly: latest-wins means an approval can go
 stale if the sealed artifact changes afterwards without a re-seal. The
 record carries the tree hash for audit; requiring seal-on-current-tree
 is deferred as ceremony until a drill shows a leak. Tamper boundary is
-attest.py's: git notes are tamper-resistant, not tamper-proof — the
-pretooluse guard should deny `git notes` outside attest.py/seal.py.
+attest.py's: git notes are tamper-resistant, not tamper-proof —
+hooks/pretooluse-guard.py denies agent-issued `git notes` writes, so
+attest.py/seal.py (which write inside their own process) stay the
+only path.
 """
 from __future__ import annotations
 

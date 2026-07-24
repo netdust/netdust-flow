@@ -141,14 +141,22 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
 - `tests/` — 85 tests (walker + hook integration + evidence + lint +
   eval).
 
-Trust boundary, named: git notes, the marker
-(`tasks/.harness-loop.json`), the compiled `.json` twins, and the run
-journal (`.flow-journal.jsonl`) are tamper-resistant, not tamper-proof.
-The pretooluse guard should deny agent writes to all four (`git notes`
-outside `attest.py`/`seal.py` included). The journal must also be
+Trust boundary, enforced (as far as resistance goes): git notes, the
+compiled `.json` twins, and the run journal (`.flow-journal.jsonl`)
+are tamper-resistant, not tamper-proof. `hooks/pretooluse-guard.py`
+(a PreToolUse hook) denies the direct forge — `git notes` writes via
+Bash, and Write/Edit to twins or journal — so a forge must be
+deliberate, not incidental; it makes no airtight claim. The marker
+(`tasks/.harness-loop.json`) is deliberately left editable because
+arming writes it; that residue is named in the guard. Wire the guard
+in `settings.json` alongside the Stop hook. The journal must also be
 GITIGNORED in the project (as `/flow` arm ensures): tracked, it would
 dirty the worktree mid-run and the ledger's clean-tree check could
 never pass.
+
+- `hooks/pretooluse-guard.py` — the trust-boundary guard: denies
+  agent-issued `git notes` writes and hand-edits of twins/journal,
+  fail-open. The enforcement the invariants above depend on.
 
 ## Runtime
 

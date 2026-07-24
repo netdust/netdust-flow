@@ -19,12 +19,12 @@ later change forces re-verification of the whole. Drift is caught by
 re-checking, not by bookkeeping.
 
 Boundary, stated honestly: git notes are tamper-resistant, not
-tamper-proof — an agent with bash could forge one. The pretooluse
-guard should deny `git notes` outside this tool and its sibling
-seal.py (human decisions), and should equally deny agent writes to
-the OTHER trust-bearing runtime files: tasks/.harness-loop.json (the
-persisted machine state) and flows/*.json (the compiled twins) — the
-marker and twins are exactly as forgeable as a note. Signing records
+tamper-proof — an agent with bash could forge one. hooks/
+pretooluse-guard.py denies the DIRECT path (`git notes` writes via
+Bash, and Write/Edit to the compiled twins and journal), so a forge
+must be deliberate rather than incidental; it does not claim to be
+airtight, and the marker (tasks/.harness-loop.json) is deliberately
+left editable because arming legitimately writes it. Signing records
 would close the rest and is deferred as ceremony until a drill shows
 a leak.
 """
