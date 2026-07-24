@@ -370,6 +370,51 @@ def test_trace_gate_error_on_unbound_placeholder(env):
                for t in traces_of(out))
 
 
+# ── twin staleness (drift is blocked, not documented) ────────────────
+
+MINI_FLOW = {
+    "flow": "mini", "version": 1, "state": {"gate": {}},
+    "nodes": [{"id": "work", "kind": "agent",
+               "craft": ["agents/implementer"]},
+              {"id": "check", "kind": "gate", "run": "true"}],
+    "edges": [{"from": "__start__", "to": "work"},
+              {"from": "work", "to": "check"},
+              {"from": "check", "to": "__end__", "when": "gate.exit == 0"},
+              {"from": "check", "to": "work", "when": "gate.exit != 0"}],
+}
+
+
+def test_stale_twin_blocks(env, tmp_path):
+    # the YAML parses to a DIFFERENT graph than the twin → fail closed
+    plugin, feature, flowstub = env
+    (tmp_path / "mini.json").write_text(json.dumps(MINI_FLOW))
+    changed = dict(MINI_FLOW, version=2)
+    import yaml
+    (tmp_path / "mini.yaml").write_text(yaml.safe_dump(changed))
+    rc, out = run(tmp_path / "mini.json", "work", feature, plugin)
+    assert rc == 2 and "STALE" in out
+
+
+def test_comment_only_yaml_edit_does_not_block(env, tmp_path):
+    # comments parse away: same data → no block, cohort hash untouched
+    plugin, feature, flowstub = env
+    (tmp_path / "mini.json").write_text(json.dumps(MINI_FLOW))
+    import yaml
+    (tmp_path / "mini.yaml").write_text(
+        "# a comment edit, semantically identical\n"
+        + yaml.safe_dump(MINI_FLOW))
+    rc, out = run(tmp_path / "mini.json", "work", feature, plugin)
+    assert rc == 0 and out.startswith("FLOW: FINISHED")   # walked normally
+    assert "STALE" not in out
+
+
+def test_twin_without_source_loads_fine(env, tmp_path):
+    plugin, feature, flowstub = env
+    (tmp_path / "solo.json").write_text(json.dumps(MINI_FLOW))
+    rc, out = run(tmp_path / "solo.json", "work", feature, plugin)
+    assert rc == 0 and "STALE" not in out
+
+
 # ── condition grammar unit tests ─────────────────────────────────────
 
 def _fc():

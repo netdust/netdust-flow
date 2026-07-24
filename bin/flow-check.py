@@ -87,10 +87,14 @@ FINISHED, CONTINUE, BLOCKED = 0, 1, 2
 
 def load_flow(path: Path) -> dict:
     if path.suffix == ".json":
-        return json.loads(path.read_text())
+        doc = json.loads(path.read_text())
+        _block_if_stale(path, doc)
+        return doc
     twin = path.with_suffix(".json")
     if twin.exists():
-        return json.loads(twin.read_text())
+        doc = json.loads(twin.read_text())
+        _block_if_stale(twin, doc)
+        return doc
     try:
         import yaml  # lint-time dependency; hook path prefers the twin
     except ImportError:
@@ -98,6 +102,32 @@ def load_flow(path: Path) -> dict:
             f"{path.name}: no compiled .json twin and PyYAML unavailable — "
             "run `flow-lint --compile` first")
     return yaml.safe_load(path.read_text())
+
+
+def _block_if_stale(twin: Path, doc: dict) -> None:
+    """Refuse a twin whose YAML source parses to DIFFERENT data — drift
+    is blocked, not documented (an agent should never need to remember
+    the recompile rule; the walker enforces it). Data equality, not
+    bytes: comment-only edits parse identically, so they neither block
+    nor split eval cohorts. Needs PyYAML to prove drift, so the check
+    is opportunistic — in authoring sessions (the only place YAML gets
+    edited) it is effectively always on; a bare hook host skips it."""
+    source = twin.with_suffix(".yaml")
+    if not source.exists():
+        return
+    try:
+        import yaml
+    except ImportError:
+        return
+    try:
+        if yaml.safe_load(source.read_text()) != doc:
+            raise RuntimeError(
+                f"{twin.name} is STALE — {source.name} parses to a "
+                "different graph; run `flow-lint --compile` first")
+    except RuntimeError:
+        raise
+    except Exception:
+        return  # unparseable source is the lint's problem, not a walk-blocker
 
 
 # ── condition grammar (closed; no eval) ──────────────────────────────
