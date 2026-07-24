@@ -1,0 +1,144 @@
+{
+  "flow": "improve-skill",
+  "version": 1,
+  "state": {
+    "gate": {}
+  },
+  "nodes": [
+    {
+      "id": "propose",
+      "kind": "agent",
+      "craft": [
+        "agents/skill-tuner",
+        "skills/craft-curation"
+      ],
+      "in": [
+        "craft memory",
+        "SKILL.md"
+      ],
+      "out": [
+        "SKILL.md",
+        "eval/cases.jsonl",
+        "{eval_outputs}"
+      ]
+    },
+    {
+      "id": "gate-cover",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/craft-memory.py --root {memory_root} cover {skill} --skill-dir {skill_dir}"
+    },
+    {
+      "id": "gate-eval",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/skill-eval.py {skill_dir} --outputs {eval_outputs}"
+    },
+    {
+      "id": "review",
+      "kind": "agent",
+      "craft": [
+        "agents/reviewer"
+      ],
+      "in": [
+        "SKILL.md"
+      ],
+      "out": [
+        "reviews/skill.md"
+      ]
+    },
+    {
+      "id": "gate-review",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/review-check.py {skill_dir} skill"
+    },
+    {
+      "id": "approve",
+      "kind": "human",
+      "out": [
+        "seal skill-adopt"
+      ]
+    },
+    {
+      "id": "gate-approval",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/seal.py check {skill_dir} skill-adopt --fresh"
+    },
+    {
+      "id": "prune",
+      "kind": "gate",
+      "run": "{netdust_flow}/bin/craft-memory.py --root {memory_root} prune {skill} --skill-dir {skill_dir} --outputs {eval_outputs}"
+    }
+  ],
+  "edges": [
+    {
+      "from": "__start__",
+      "to": "propose"
+    },
+    {
+      "from": "propose",
+      "to": "gate-cover"
+    },
+    {
+      "from": "gate-cover",
+      "to": "gate-eval",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-cover",
+      "to": "propose",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "gate-eval",
+      "to": "review",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-eval",
+      "to": "propose",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "review",
+      "to": "gate-review"
+    },
+    {
+      "from": "gate-review",
+      "to": "approve",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-review",
+      "to": "propose",
+      "when": "gate.exit != 0"
+    },
+    {
+      "from": "approve",
+      "to": "gate-approval"
+    },
+    {
+      "from": "gate-approval",
+      "to": "prune",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "gate-approval",
+      "to": "propose",
+      "when": "gate.exit == 2"
+    },
+    {
+      "from": "gate-approval",
+      "to": "approve",
+      "when": "gate.exit == 1"
+    },
+    {
+      "from": "prune",
+      "to": "__end__",
+      "when": "gate.exit == 0"
+    },
+    {
+      "from": "prune",
+      "to": "propose",
+      "when": "gate.exit != 0"
+    }
+  ]
+}
