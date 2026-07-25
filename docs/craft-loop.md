@@ -84,6 +84,43 @@ Trigger `improve-skill` off a **persistent** cohort hotspot in
 single rejection. One "not our brand voice" is a data point; twenty are
 a lesson.
 
+## Authoring notes (from Anthropic's Opus 5 guidance)
+
+Opus 5 self-verifies and self-corrects natively, so the craft nodes must
+not pay for verification twice. Three rules when authoring a skill or a
+flow node:
+
+1. **Don't scaffold self-verification.** A skill line that tells the
+   agent to check its own output against a gate ("confirm ≥3 sources
+   before finishing") is redundant twice over — the model self-checks,
+   and the gate judges anyway. Let the agent do the work once; the gate
+   IS the verification. Independent verification (a deterministic gate, a
+   fresh-context reviewer) stays; the agent re-checking *itself* goes.
+   This is the whole distinction: self-verification is native and free,
+   so stop instructing it; independent verification is load-bearing, so
+   keep it — the improvement in the former does not reduce the need for
+   the latter, it just changes where you spend it.
+
+2. **Review nodes report everything, then filter.** Tell a reviewer to
+   list EVERY finding and rank severity, and treat the CLEAN/ISSUES
+   verdict as a filter on that ranked list — never as "be conservative"
+   or "only report high-severity." Opus 5 follows a conservatism
+   instruction literally and reports less; report-all-then-filter is what
+   preserves recall. (`review-check.py` keys off the `VERDICT: CLEAN`
+   line; the reviewer's prompt owns the report-all discipline.)
+
+3. **Tier effort per node.** A gate is deterministic (no model), but the
+   agent nodes are not all equal: cheap, schema-shaped work (gather,
+   extract, produce case outputs) runs well at `low`/`medium` effort;
+   the hard reasoning nodes (a from-scratch skill revision, the
+   fresh-context review) warrant `high`. Start at the default and sweep
+   effort on your own evals — the same journal/flow-eval loop measures
+   whether a lower tier held quality.
+
+The un-gameable check for all three is the same as ever: if a change to
+how craft is authored makes flow-eval's live cohort worse, it was wrong,
+whatever it saved.
+
 ## The whole picture
 
 ```
