@@ -48,6 +48,12 @@ approves anything, and rejection routes along its own edge. __human__
 is still honored for backward compatibility but is an absorbing state;
 flow-lint WARNs on it.
 
+Project-owned flows (v0.4): --flow takes ANY path, so a flow can live
+in the project it drives (the `.flow/` pack convention) rather than in
+this runtime. Relative gate programs resolve against the project root
+first, so a project's flow names its project's gates. netdust-flow
+stays domain-independent: it supplies the machine, never the checks.
+
 Safety: conditions are parsed with a closed grammar (key op literal;
 ops == != > >= < <= in) — no eval(). Gates run without a shell. Every
 config problem (unknown node, unmatched edge, unbound {placeholder},
@@ -195,9 +201,15 @@ def run_gate(node: dict, binds: dict, plugin_root: Path,
     argv = shlex.split(cmd)
     prog = Path(argv[0])
     if not prog.is_absolute():
-        candidate = plugin_root / argv[0]
-        if candidate.exists():
-            prog = candidate
+        # A relative gate program is resolved PROJECT-FIRST: a flow that
+        # ships with a project (`.flow/bin/…`) names its own gates, and
+        # the project must win over anything installed globally — the
+        # runtime stays project-independent precisely by not owning the
+        # checks. The plugin root remains the fallback for shared craft.
+        for candidate in (cwd / argv[0], plugin_root / argv[0]):
+            if candidate.exists():
+                prog = candidate
+                break
     if str(prog).endswith(".py"):
         argv = [sys.executable, str(prog)] + argv[1:]
     else:

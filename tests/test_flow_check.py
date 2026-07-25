@@ -446,3 +446,73 @@ def test_arming_from_start(env):
     plugin, feature, flowstub = env
     rc, out = run(DELIVER, "__start__", feature, plugin, flowstub=flowstub)
     assert rc == 1 and next_of(out) == "brainstorm"
+
+
+# ── project-owned flows: the runtime supplies the machine, the project
+# supplies the flow AND its gates (netdust-flow stays domain-agnostic)
+
+PROJECT_FLOW = """\
+flow: site
+version: 1
+state:
+  gate: {}
+nodes:
+  - id: build
+    kind: agent
+    craft: [.flow/craft/build.md]
+    out: [code]
+  - id: gate-project
+    kind: gate
+    run: ".flow/bin/project-gate.py {feature_dir}"
+edges:
+  - {from: __start__, to: build}
+  - {from: build, to: gate-project}
+  - {from: gate-project, to: __end__, when: gate.exit == 0}
+  - {from: gate-project, to: build, when: gate.exit != 0}
+"""
+
+
+def _project(tmp_path, gate_exit):
+    """A project that owns both its flow and the gate the flow names."""
+    proj = tmp_path / "site-repo"
+    (proj / ".flow" / "bin").mkdir(parents=True)
+    (proj / ".flow" / "flows").mkdir(parents=True)
+    (proj / ".flow" / "flows" / "site.yaml").write_text(PROJECT_FLOW)
+    (proj / ".flow" / "bin" / "project-gate.py").write_text(
+        f"import sys\nprint('ok' if not {gate_exit} else 'FAIL  [wp]  red')\n"
+        f"sys.exit({gate_exit})\n")
+    (proj / "feature").mkdir()
+    return proj
+
+
+def test_project_owned_flow_and_gate_walks(tmp_path, ):
+    proj = _project(tmp_path, 0)
+    plugin = tmp_path / "plugin"
+    plugin.mkdir()
+    rc, out = run(proj / ".flow" / "flows" / "site.yaml", "build",
+                  proj / "feature", plugin, "--cwd", str(proj))
+    assert rc == 0, out          # FINISHED through a gate the repo owns
+    assert "FINISHED" in out
+
+
+def test_project_gate_red_routes_back(tmp_path):
+    proj = _project(tmp_path, 1)
+    plugin = tmp_path / "plugin"
+    plugin.mkdir()
+    rc, out = run(proj / ".flow" / "flows" / "site.yaml", "build",
+                  proj / "feature", plugin, "--cwd", str(proj))
+    assert rc == 1 and next_of(out) == "build", out
+
+
+def test_project_gate_wins_over_plugin_root(tmp_path):
+    # same relative name in both places: the project's must run, or a
+    # globally installed script could silently answer for a project
+    proj = _project(tmp_path, 0)
+    plugin = tmp_path / "plugin"
+    (plugin / ".flow" / "bin").mkdir(parents=True)
+    (plugin / ".flow" / "bin" / "project-gate.py").write_text(
+        "import sys\nprint('FAIL  [plugin]  wrong gate ran')\nsys.exit(1)\n")
+    rc, out = run(proj / ".flow" / "flows" / "site.yaml", "build",
+                  proj / "feature", plugin, "--cwd", str(proj))
+    assert rc == 0, out
+    assert "wrong gate ran" not in out

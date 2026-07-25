@@ -203,3 +203,21 @@ def test_flowless_marker_is_ignored_untouched(tmp_path):
     assert rc == 0 and out.strip() == ""
     assert marker_of(cwd) is not None       # left untouched
     assert journal_of(cwd) is None          # nothing journaled
+
+
+def test_run_id_unique_across_concurrent_runs(tmp_path):
+    # F1: two records armed in the same second used to receive the SAME
+    # run id, which left feature-scoping as the only thing keeping one
+    # run's evidence out of the other's gate. Run-scoping must stand on
+    # its own.
+    ids = set()
+    for i in range(8):
+        base = tmp_path / f"r{i}"
+        base.mkdir()
+        home, cwd = setup(base, PATCH, "build",
+                          binds={"test_suite_cmd": suite(base, 1)})
+        run_gate(cwd, home)
+        ids.add(marker_of(cwd)["run_id"])
+    assert len(ids) == 8, f"run ids collided: {sorted(ids)}"
+    assert all(rid.startswith("r20") and len(rid.split("-")) == 3
+               for rid in ids), sorted(ids)

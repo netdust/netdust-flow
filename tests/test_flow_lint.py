@@ -170,3 +170,77 @@ def test_compile_refused_on_fail(tmp_path):
     subprocess.run([sys.executable, str(LINT), str(f), "--compile"],
                    capture_output=True, text=True, timeout=60)
     assert not (tmp_path / "bad.json").exists()
+
+
+# ── --check-gates: a project-owned flow must name gates that exist
+
+GATED = """\
+flow: site
+version: 1
+state: {gate: {}}
+nodes:
+  - id: build
+    kind: agent
+    craft: [.flow/craft/build.md]
+    out: [code]
+  - id: gate-x
+    kind: gate
+    run: ".flow/bin/present.py {feature_dir}"
+  - id: gate-y
+    kind: gate
+    run: "{gate_check_cmd} {feature_dir}"
+edges:
+  - {from: __start__, to: build}
+  - {from: build, to: gate-x}
+  - {from: gate-x, to: gate-y, when: gate.exit == 0}
+  - {from: gate-x, to: build, when: gate.exit != 0}
+  - {from: gate-y, to: __end__, when: gate.exit == 0}
+  - {from: gate-y, to: build, when: gate.exit != 0}
+"""
+
+
+def _gated_project(tmp_path, with_gate):
+    proj = tmp_path / "proj"
+    (proj / ".flow" / "bin").mkdir(parents=True)
+    (proj / "site.yaml").write_text(GATED)
+    if with_gate:
+        (proj / ".flow" / "bin" / "present.py").write_text("import sys\n")
+    return proj
+
+
+def _lint(proj, *extra):
+    p = subprocess.run(
+        [sys.executable, str(ROOT / "bin" / "flow-lint.py"),
+         str(proj / "site.yaml"), "--check-gates", "--project", str(proj),
+         *extra],
+        capture_output=True, text=True)
+    return p.returncode, p.stdout
+
+
+def test_check_gates_passes_when_the_gate_exists(tmp_path):
+    rc, out = _lint(_gated_project(tmp_path, True))
+    assert rc == 0, out
+
+
+def test_check_gates_fails_on_a_missing_gate_program(tmp_path):
+    rc, out = _lint(_gated_project(tmp_path, False))
+    assert rc == 1, out
+    assert "gate-x" in out and "does not exist" in out, out
+
+
+def test_check_gates_warns_not_fails_on_a_bound_gate(tmp_path):
+    # {gate_check_cmd} is supplied at arm time; the lint cannot know it
+    # and must not invent a failure
+    rc, out = _lint(_gated_project(tmp_path, True))
+    assert rc == 0, out
+    assert "WARN" in out and "gate-y" in out, out
+
+
+def test_check_gates_is_opt_in(tmp_path):
+    # without the flag, a flow naming absent gates still lints clean —
+    # the built-in roads name gates that live elsewhere by design
+    proj = _gated_project(tmp_path, False)
+    p = subprocess.run(
+        [sys.executable, str(ROOT / "bin" / "flow-lint.py"),
+         str(proj / "site.yaml")], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout

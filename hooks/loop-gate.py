@@ -51,6 +51,7 @@ cost of the obvious tamper.
 
 import hashlib
 import json
+import secrets
 import subprocess
 import sys
 import time
@@ -166,7 +167,13 @@ def main() -> None:
     # run identity: minted at the first stop of an armed run and
     # persisted in the marker, so every stop of one arming shares it
     if not marker.get("run_id"):
-        marker["run_id"] = time.strftime("r%Y%m%d-%H%M%S")
+        # A run id scopes evidence (attests, seals). Seconds are not
+        # enough resolution: two records armed in the same second get
+        # the same id, and then only feature-scoping keeps one run's
+        # approval out of the other's gate. The suffix makes run-scoping
+        # stand on its own rather than lean on that second guard.
+        marker["run_id"] = (time.strftime("r%Y%m%d-%H%M%S")
+                            + "-" + secrets.token_hex(2))
     try:
         fhash = hashlib.sha256(flow_path.read_bytes()).hexdigest()[:12]
     except Exception:

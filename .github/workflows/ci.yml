@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r requirements-dev.txt
+      # git notes are the evidence store; the suite writes real ones
+      - name: identify to git
+        run: |
+          git config --global user.email "ci@netdust-flow.invalid"
+          git config --global user.name "netdust-flow ci"
+      - run: python -m pytest tests/ -q
+
+  flows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: lint every flow, including the examples
+        run: python bin/flow-lint.py flows/*.yaml examples/*/flow.yaml
+      # The walker reads the compiled twin. A twin that drifts from its
+      # source is the one config error the runtime cannot catch for a
+      # host without PyYAML, so prove here that every committed twin is
+      # exactly what the source compiles to.
+      - name: twins are in sync with their sources
+        run: |
+          python bin/flow-lint.py flows/*.yaml --compile
+          git diff --exit-code -- flows/ \
+            || { echo "::error::a committed .json twin is stale — run flow-lint --compile"; exit 1; }
+
+  hooks-run-without-authoring-deps:
+    # The Stop hook path must work on a bare interpreter: no PyYAML, no
+    # jsonschema. This job installs pytest ONLY, so an import creeping
+    # into the hook path fails here instead of on someone's machine.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - run: |
+          git config --global user.email "ci@netdust-flow.invalid"
+          git config --global user.name "netdust-flow ci"
+      - run: python -m pytest tests/test_flow_gate.py tests/test_evidence.py -q

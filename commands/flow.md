@@ -14,15 +14,42 @@ Resolve `<netdust-flow>` via the stable symlink `~/.claude/netdust-flow`
 
 ## /flow <feature-dir> <flow>  (arm)
 
-`<flow>` is a name under `<netdust-flow>/flows/` — `deliver` or `patch`.
+`<flow>` is a flow NAME, resolved project-first:
+
+1. `.flow/flows/<flow>.yaml` in the project — a flow the project owns,
+   naming gates the project owns (`.flow/bin/…`, resolved relative to
+   the project root). This is the normal case for any project with
+   domain-specific checks: the runtime supplies the machine, the
+   project supplies the checks. See `docs/project-pack.md`.
+2. `<netdust-flow>/flows/<flow>.yaml` — the built-in roads (`deliver`,
+   `patch`), which are domain-independent by construction.
+
+A name present in both resolves to the project's, and you must say so
+in the arm confirmation. A path argument (`./somewhere/x.yaml`) is
+taken literally. Whichever wins, the marker records the resolved
+absolute path to its compiled `.json` twin — never the bare name, so a
+later `/flow status` cannot silently bind a different file.
 
 Preconditions — refuse to arm (say why) if any fails:
 
 1. **Lint + twin fresh:** run
-   `python3 <netdust-flow>/bin/flow-lint.py <netdust-flow>/flows/<flow>.yaml --compile`
+   `python3 <netdust-flow>/bin/flow-lint.py <resolved flow>.yaml --compile`
    — exit 0 required (needs PyYAML + jsonschema, authoring-side only).
    The walker reads the `.json` twin; a stale or FAIL-ing flow must
-   never drive a run.
+   never drive a run. This applies to a project-owned flow exactly as
+   it does to a built-in one: a project does not get to skip the lint
+   by keeping its flow in its own repo.
+1b. **project flow — every gate must exist:** for a `.flow/` flow,
+   each gate's program must resolve (project root first, then the
+   plugin root) and be executable. A flow naming a gate that is not
+   there fails at the worst possible moment — mid-run, as a BLOCKED
+   walk — so it is refused at arm time instead. Run
+   `python3 <netdust-flow>/bin/flow-lint.py <flow>.yaml --check-gates
+   --project .`
+1c. **project flow — binds:** a project flow declares the binds it
+   needs in `.flow/pack.yaml` (`binds:`). Every one must resolve at arm
+   time or refuse — an unbound `{placeholder}` BLOCKS the walk anyway,
+   so discovering it now costs one line instead of a dead run.
 2. **deliver — the gate command:** the project defines the spec/plan
    gate command (`Gate check:` line in the project CLAUDE.md, or ask
    the human once) — bound as `gate_check_cmd`, it drives `gate-spec`
@@ -60,7 +87,7 @@ Then:
    ```
    {"feature_dir": "<feature-dir>", "iteration": 0, "max_iterations": N,
     "last_done": 0, "dry": 0,
-    "flow": "<netdust-flow>/flows/<flow>.json", "node": "__start__",
+    "flow": "<resolved flow dir>/<flow>.json", "node": "__start__",
     "flow_check": "<netdust-flow>/bin/flow-check.py",
     "binds": {"netdust_flow": "<netdust-flow>",
               "gate_check_cmd": "<cmd>",      # deliver: spec/plan gates

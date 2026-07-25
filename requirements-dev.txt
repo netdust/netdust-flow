@@ -1,0 +1,11 @@
+# Authoring-side dependencies ONLY.
+#
+# The Stop-hook path (hooks/loop-gate.py -> bin/flow-check.py -> gates)
+# runs on a bare interpreter and must keep doing so: it reads the
+# compiled .json twins precisely so a host needs no YAML parser. CI
+# proves this in the `hooks-run-without-authoring-deps` job.
+#
+# These are what you need to AUTHOR and TEST flows, not to run them.
+pyyaml>=6.0        # bin/flow-lint.py reads .yaml sources
+jsonschema>=4.0    # flow.schema.json enforcement (Draft 2020-12)
+pytest>=7.0        # tests/

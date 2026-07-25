@@ -2,7 +2,7 @@
 """seal.py — record and read HUMAN decisions as evidence (I4).
 
     seal.py record <feature-dir> <node-id> <approved|rejected> [--note TEXT]
-    seal.py check  <feature-dir> <node-id>
+    seal.py check  <feature-dir> <node-id> [--fresh]
 
 The missing half of attest.py: attest records what a CHECK proved,
 seal records what a HUMAN decided. Both write structured records into
@@ -18,6 +18,8 @@ must not advance the flow).
     check   scans commits reachable from HEAD, newest first; the most
             recent record for <node-id> wins.
             Exit 0 approved · 2 rejected · 1 no seal recorded.
+            --fresh additionally requires the decision to still describe
+            what is on disk (see below); a stale one exits 1, not 0.
 
 Flows wire it as a gate after each human node:
 
@@ -29,10 +31,23 @@ Flows wire it as a gate after each human node:
       - {from: gate-approval, to: plan,         when: gate.exit == 2}
       - {from: gate-approval, to: approve-plan, when: gate.exit == 1}
 
-Freshness model, stated honestly: latest-wins means an approval can go
-stale if the sealed artifact changes afterwards without a re-seal. The
-record carries the tree hash for audit; requiring seal-on-current-tree
-is deferred as ceremony until a drill shows a leak. Tamper boundary is
+Freshness model. The DEFAULT is latest-wins: an approval can go stale
+if the sealed artifact changes afterwards without a re-seal. The record
+carries the tree hash, so `--fresh` turns that audit trail into a gate
+— use it on any finishing gate whose decision is judgment-bearing
+(send, publish, sign, ship). A seal is FRESH only when both hold:
+
+  * the recorded `tree` equals the current `HEAD^{tree}` — nothing has
+    been committed since the human looked; and
+  * the worktree is clean UNDER <feature-dir> — nothing has been edited
+    since either. Without this second half the whole check is bypassed
+    by simply not committing, which is the easiest drift there is.
+
+A stale seal exits NO_SEAL (1), never `rejected` (2): drift is not a
+human saying no, it is a human who has not been asked yet. Flows route
+1 back to the human node, so the effect is to re-ask — and because a
+rejection goes stale by the same rule, the fix that answers a rejection
+also re-asks rather than looping on the old `no`. Tamper boundary is
 attest.py's: git notes are tamper-resistant, not tamper-proof —
 hooks/pretooluse-guard.py denies agent-issued `git notes` writes, so
 attest.py/seal.py (which write inside their own process) stay the
@@ -116,7 +131,42 @@ def record(feature_dir: str, node: str, decision: str, note: str,
     return 0
 
 
-def check(node: str, feature: str, cwd: Path) -> int:
+def head_tree(cwd: Path) -> str:
+    rc, out = sh("git", "rev-parse", "HEAD^{tree}", cwd=cwd)
+    return out.strip() if rc == 0 else ""
+
+
+def dirty_under(feature: str, cwd: Path) -> list[str]:
+    """Paths with uncommitted changes under <feature-dir>. A seal is a
+    decision about a state; if that state has been edited since, the
+    decision no longer describes it — and HEAD^{tree} alone cannot see
+    this, because an uncommitted edit does not move the tree."""
+    rc, out = sh("git", "status", "--porcelain", "--", feature, cwd=cwd)
+    if rc != 0:
+        return []
+    return [l[3:].strip() for l in out.splitlines() if l.strip()]
+
+
+def stale_reason(rec: dict, feature: str, cwd: Path) -> str | None:
+    """Why this seal no longer describes what is on disk, or None."""
+    sealed = str(rec.get("tree") or "")
+    if not sealed:
+        return "the record carries no tree hash (pre-freshness seal)"
+    current = head_tree(cwd)
+    if not current:
+        return "cannot resolve the current HEAD tree"
+    if sealed != current:
+        return (f"sealed on tree {sealed[:12]} but HEAD is "
+                f"{current[:12]} — the artifact changed after the decision")
+    edited = dirty_under(feature, cwd)
+    if edited:
+        shown = ", ".join(edited[:3]) + (", …" if len(edited) > 3 else "")
+        return (f"uncommitted changes under {feature} since the seal "
+                f"({shown})")
+    return None
+
+
+def check(node: str, feature: str, cwd: Path, fresh: bool = False) -> int:
     want = canon_feature(feature, cwd)
     want_run = current_run(cwd)   # None when standalone → feature-only
     rc, reach = sh("git", "rev-list", "HEAD", cwd=cwd)
@@ -164,6 +214,12 @@ def check(node: str, feature: str, cwd: Path) -> int:
         if latest is not None:
             decision = latest.get("decision")
             code = DECISIONS.get(decision, NO_SEAL)
+            if fresh and code != NO_SEAL:
+                why = stale_reason(latest, want, cwd)
+                if why:
+                    print(f"SEAL: STALE — {node} {decision} is no longer "
+                          f"current: {why}. Re-ask the human.")
+                    return NO_SEAL
             print(f"SEAL: {decision} — {node} (recorded {latest.get('ts')})")
             return code
     print(f"SEAL: absent — {node} needs a human decision "
@@ -182,12 +238,15 @@ def main() -> int:
     chk = sub.add_parser("check")
     chk.add_argument("feature_dir")
     chk.add_argument("node")
+    chk.add_argument("--fresh", action="store_true",
+                     help="a decision that no longer describes what is on "
+                          "disk exits 1 (re-ask) instead of 0")
     args = ap.parse_args()
     cwd = Path.cwd()
     if args.mode == "record":
         return record(args.feature_dir, args.node, args.decision,
                       args.note, cwd)
-    return check(args.node, args.feature_dir, cwd)
+    return check(args.node, args.feature_dir, cwd, fresh=args.fresh)
 
 
 if __name__ == "__main__":

@@ -219,13 +219,69 @@ def lint_file(path: Path, f: Findings) -> None:
         f.fail("graph", f"{path.name}: __end__ unreachable")
 
 
+PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+
+
+def check_gates(path: Path, project: Path, binds: dict, f: Findings) -> None:
+    """Every gate program a flow names must exist NOW, in the project
+    that owns the flow. A missing gate is otherwise discovered mid-run
+    as a BLOCKED walk, which reads like a flow defect and costs a whole
+    arming to diagnose. Only fully-bound program paths can be checked —
+    a gate whose program comes from a {bind} is the arm step's problem
+    (it verifies binds resolve), so it is reported as a WARN, not a
+    false FAIL — unless the caller supplied that bind with --bind, in
+    which case it resolves and is checked like any other. A project
+    that knows where its own gates live should say so and get a real
+    check instead of a warning."""
+    try:
+        doc = yaml.safe_load(path.read_text())
+    except Exception:
+        return  # the parse FAIL is already recorded by lint_file
+    if not isinstance(doc, dict):
+        return
+    for node in doc.get("nodes", []) or []:
+        if not isinstance(node, dict) or node.get("kind") != "gate":
+            continue
+        run = str(node.get("run", "")).strip()
+        if not run:
+            continue
+        prog = run.split()[0]
+        for key, val in binds.items():
+            prog = prog.replace("{" + key + "}", val)
+        if PLACEHOLDER_RE.search(prog):
+            f.warn("gates", f"{path.name}: gate `{node.get('id')}` program "
+                            f"comes from a bind ({prog}) — verified at arm")
+            continue
+        candidate = Path(prog)
+        if not candidate.is_absolute():
+            candidate = project / prog
+        if not candidate.exists():
+            f.fail("gates", f"{path.name}: gate `{node.get('id')}` names "
+                            f"`{prog}`, which does not exist under {project}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Static gate for netdust-flow files")
     ap.add_argument("paths", nargs="+", type=Path)
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--compile", action="store_true",
                     help="write a .json twin for every file that lints clean")
+    ap.add_argument("--check-gates", action="store_true",
+                    help="every gate program named by the flow must exist")
+    ap.add_argument("--project", type=Path, default=Path.cwd(),
+                    help="project root relative gate programs resolve against")
+    ap.add_argument("--bind", action="append", default=[], metavar="NAME=VALUE",
+                    help="resolve a {placeholder} so --check-gates can check "
+                         "it for real instead of warning")
     args = ap.parse_args()
+
+    binds = {}
+    for b in args.bind:
+        if "=" not in b:
+            print(f"FAIL  [usage]  bad --bind `{b}` (NAME=VALUE)")
+            return 1
+        k, v = b.split("=", 1)
+        binds[k] = v
 
     f = Findings()
     for path in args.paths:
@@ -234,6 +290,8 @@ def main() -> int:
             continue
         local = Findings()
         lint_file(path, local)
+        if args.check_gates:
+            check_gates(path, args.project, binds, local)
         f.items.extend(local.items)
         if args.compile and not local.failed and path.suffix != ".json":
             twin = path.with_suffix(".json")

@@ -105,6 +105,7 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
 | [`docs/article.md`](docs/article.md) | The essay: why generation and authority must be separated. |
 | [`docs/theory.md`](docs/theory.md) | The research verdict: sources, debate, confidence, limitations. |
 | [`docs/runs.md`](docs/runs.md) | The run ledger — every flow-driven delivery, measured. |
+| [`docs/project-pack.md`](docs/project-pack.md) | How a project owns its own flow and gates — the runtime supplies the machine, never the checks. |
 | [`docs/examples.md`](docs/examples.md) | Index of the example flows under `examples/`. |
 
 ## Parts
@@ -127,7 +128,10 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
   verifier into git notes; delivery state derived on request.
 - `bin/seal.py` — human decisions as evidence (I4): `record` writes a
   decision into git notes, `check` reads the latest back as an exit
-  code for the seal gate after each human node.
+  code for the seal gate after each human node. `check --fresh` also
+  requires the decision to still describe what is on disk (same tree,
+  clean under the feature dir) and exits 1 — re-ask — when it does not,
+  so a judgment-bearing finish cannot ride a stale approval.
 - `bin/flow-eval.py` — aggregates run journals into cohorts by flow
   version (content hash of the twin): exit histograms, first-pass
   rates, executions-to-green, human yields. The journal measures, the
@@ -138,8 +142,12 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
 - `commands/flow.md` — `/flow` arm · off · status · seal · eval.
 - `examples/` — four small lint-clean flows with expected paths and
   the evidence each generates.
-- `tests/` — 85 tests (walker + hook integration + evidence + lint +
-  eval).
+- `.flow/` — this repo's own project pack (its spec/plan gate). The
+  convention has a consumer here so it cannot rot untested.
+- `tests/` — 123 tests (walker + hook integration + evidence + lint +
+  eval + project packs), run by CI on Python 3.10–3.12. One CI job
+  installs no authoring dependencies at all, which is how the promise
+  that the hook path needs no PyYAML stays true.
 
 Trust boundary, enforced (as far as resistance goes): git notes, the
 compiled `.json` twins, and the run journal (`.flow-journal.jsonl`)

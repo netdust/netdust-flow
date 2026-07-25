@@ -241,3 +241,68 @@ def test_floor_missing_base_fails_closed(repo):
     # shrink the diff to worktree-only and let committed changes escape
     p = sh(sys.executable, str(FLOORS), "--base", "no-such-ref", cwd=repo)
     assert p.returncode == 2 and "cannot resolve base" in p.stdout
+
+
+# ── seal freshness (--fresh): a decision must still describe what is
+# on disk. Default stays latest-wins; the finishing gates opt in.
+
+def _commit(cwd, msg="change"):
+    sh("git", "add", "-A", cwd=cwd)
+    sh("git", "commit", "-m", msg, cwd=cwd)
+
+
+def test_seal_fresh_accepts_an_undisturbed_approval(repo):
+    seal(repo, "record", "specs/demo", "shakeout", "approved")
+    rc, out = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 0, out          # nothing moved — the seal still holds
+
+
+def test_seal_fresh_flags_drift(repo):
+    # the F2 drill: approve, then commit an edit to the sealed artifact.
+    # Default check still passes (latest-wins); --fresh must re-ask.
+    seal(repo, "record", "specs/demo", "shakeout", "approved")
+    (repo / "specs" / "demo" / "dossier.md").write_text("edited after seal\n")
+    _commit(repo, "post-seal edit")
+    rc, _ = seal(repo, "check", "specs/demo", "shakeout")
+    assert rc == 0, "default must stay latest-wins"
+    rc, out = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 1, out
+    assert "STALE" in out and "HEAD is" in out, out
+
+
+def test_seal_fresh_catches_uncommitted_drift(repo):
+    # the hole a tree-only check leaves: never commit, and HEAD^{tree}
+    # never moves, so the seal rides forever. Dirty UNDER the feature
+    # is drift too.
+    seal(repo, "record", "specs/demo", "shakeout", "approved")
+    (repo / "specs" / "demo" / "dossier.md").write_text("uncommitted edit\n")
+    rc, out = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 1, out
+    assert "STALE" in out and "uncommitted" in out, out
+
+
+def test_seal_fresh_ignores_edits_outside_the_feature(repo):
+    # another feature's work in flight must not invalidate this seal,
+    # or nothing in a busy repo could ever finish
+    seal(repo, "record", "specs/demo", "shakeout", "approved")
+    (repo / "unrelated.txt").write_text("someone else's work\n")
+    rc, out = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 0, out
+
+
+def test_seal_fresh_rejection_goes_stale_after_the_fix(repo):
+    # a rejection is a decision about a state too: once the fix lands,
+    # the `no` no longer describes the artifact, so the gate must
+    # re-ask (1) rather than loop on the old rejection (2)
+    seal(repo, "record", "specs/demo", "shakeout", "rejected")
+    rc, _ = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 2, "a fresh rejection still routes as a rejection"
+    (repo / "specs" / "demo" / "dossier.md").write_text("the fix\n")
+    _commit(repo, "address the rejection")
+    rc, out = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 1, out
+
+
+def test_seal_fresh_absent_is_still_absent(repo):
+    rc, out = seal(repo, "check", "specs/demo", "shakeout", "--fresh")
+    assert rc == 1 and "absent" in out
