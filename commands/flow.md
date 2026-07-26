@@ -31,6 +31,7 @@ and it refuses rather than guesses:
 | a gate names a program that exists nowhere the walker looks | precondition 1b |
 | a `{placeholder}` used by a gate has no value | preconditions 1c, 2, 5 |
 | `.flow/pack.yaml` requires a tool that is not on PATH | precondition 1c |
+| the flow scans floors and there is no `.flow/floors.yaml` | new — the runtime used to supply one |
 | a `{base_ref}` diff base does not resolve in the repo | new — used to fail mid-run |
 | `--node` names a node the flow does not declare | new |
 | a marker is already there | new — re-arming discarded the live run's id |
@@ -49,8 +50,9 @@ argument is taken literally. The marker always records the resolved
 ABSOLUTE path to the compiled twin, never the bare name, so a later
 `/flow status` cannot silently bind a different file.
 
-Bind values, in increasing precedence: `netdust_flow` and `base_ref`
-(default `main`, verified to resolve); the project CLAUDE.md
+Bind values, in increasing precedence: `netdust_flow`, `base_ref`
+(default `main`, verified to resolve) and `floors_file` (default
+`.flow/floors.yaml`, verified to exist); the project CLAUDE.md
 (`Gate check:` → `gate_check_cmd`, `Test suite:` → `test_suite_cmd`);
 then `--bind NAME=VALUE`. `feature_dir` is never a marker bind — the
 walker supplies it. Pass `--node <id>` to graft onto an existing run,

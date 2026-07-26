@@ -1,6 +1,6 @@
 {
   "flow": "patch",
-  "version": 1,
+  "version": 2,
   "state": {
     "gate": {}
   },
@@ -25,7 +25,7 @@
     {
       "id": "gate-floors",
       "kind": "gate",
-      "run": "{netdust_flow}/bin/floor-check.py --base {base_ref}"
+      "run": "{netdust_flow}/bin/floor-check.py --floors {floors_file} --base {base_ref}"
     },
     {
       "id": "redispatch",

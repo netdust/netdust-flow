@@ -10,9 +10,16 @@
 # v1 (I4): the re-dispatch is itself evidence — the human seals
 # `redispatch` approved once the work has been moved to the deliver
 # flow; only that seal ends the patch road. Resumption is not a seal.
+#
+# v2 (v0.5): the floors file is BOUND, not defaulted. Until now
+# gate-floors ran floor-check with no --floors, so it fell back to the
+# runtime's own floors.yaml — every project inherited netdust-flow's
+# WordPress patterns. `{floors_file}` comes from the project's pack
+# (`.flow/floors.yaml`); flow-arm refuses to arm without it, and
+# floor-check fails closed if it is missing anyway.
 
 flow: patch
-version: 1
+version: 2
 
 state:
   gate: {}                # last gate exit code — written by the walker
@@ -28,8 +35,9 @@ nodes:
     run: "{test_suite_cmd}"
 
   - id: gate-floors       # principle 8's gate: floor-touching work
-    kind: gate            # cannot exit on the short road
-    run: "{netdust_flow}/bin/floor-check.py --base {base_ref}"
+    kind: gate            # cannot exit on the short road. The floors
+                          # are the PROJECT's (v2) — see the header.
+    run: "{netdust_flow}/bin/floor-check.py --floors {floors_file} --base {base_ref}"
 
   - id: redispatch        # floor hit: a human moves the work to deliver
     kind: human           # and seals `redispatch` approved; there is no

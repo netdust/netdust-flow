@@ -77,6 +77,33 @@ a BLOCKED walk, which reads like a flow defect and costs a whole arming
 to diagnose. Gate programs that come from a `{bind}` are reported WARN,
 not FAIL — the lint cannot know them, and the arm step verifies binds.
 
+## floors.yaml
+
+`.flow/floors.yaml` is what this codebase considers dangerous enough
+to force onto the long road. The `patch` flow binds it as
+`{floors_file}` and `bin/floor-check.py` scans the real diff against
+it on the way out; a hit routes to a human for re-dispatch. Floors
+only ever push work UP.
+
+Three rules, all learned the same way:
+
+1. **The runtime ships none.** Until v0.5 a `floors.yaml` sat in the
+   runtime's root describing `wp-login`, `dbDelta` and Stripe, and
+   `patch` ran `floor-check` without `--floors` — so every project
+   that took the short road was measured against a WordPress
+   project's fears. A worked example now lives at
+   `examples/wordpress-plugin/floors.yaml`; copy it and tune it, or
+   write your own (this repo's is `.flow/floors.yaml`, and it is about
+   evidence stores and the hook path, not about WordPress).
+2. **Missing means BLOCKED, not clean.** `flow-arm.py` refuses to arm
+   a floors-scanning flow when the file is absent, and `floor-check`
+   fails closed if it gets that far. A floor file nobody wrote is not
+   a floor that always passes; it is a question nobody answered.
+3. **Editing your floors trips your floors.** Patterns are matched
+   against the diff text, and a diff that adds a pattern contains it.
+   That is correct behaviour — changing what counts as dangerous is
+   itself deliver-road work — but it surprises everyone once.
+
 ## The rule a pack must not break
 
 A project owns its checks. It does not own the invariants. A pack

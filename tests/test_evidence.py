@@ -28,6 +28,14 @@ def repo(tmp_path):
     sh("git", "config", "user.name", "t", cwd=cwd)
     (cwd / "specs" / "demo" / "tasks.md").write_text(
         "- [ ] T01 [Tier B] first\n- [ ] T02 [Tier C] second\n")
+    # the floors are the PROJECT's (docs/project-pack.md) — the runtime
+    # ships none, so a repo under test writes its own
+    (cwd / ".flow").mkdir(parents=True)
+    (cwd / ".flow" / "floors.yaml").write_text(
+        "floors:\n"
+        "  schema:\n"
+        "    paths: [\"**/migrations/**\"]\n"
+        "    content: ['CREATE TABLE', 'ALTER TABLE']\n")
     (cwd / "a.txt").write_text("v1\n")
     sh("git", "add", "-A", cwd=cwd)
     sh("git", "commit", "-m", "init", cwd=cwd)
@@ -241,6 +249,35 @@ def test_floor_missing_base_fails_closed(repo):
     # shrink the diff to worktree-only and let committed changes escape
     p = sh(sys.executable, str(FLOORS), "--base", "no-such-ref", cwd=repo)
     assert p.returncode == 2 and "cannot resolve base" in p.stdout
+
+
+def test_floor_missing_floors_file_fails_closed(repo):
+    # "nothing was scanned" must never read as "clean" on a gate whose
+    # whole job is pushing work up. The runtime ships no floors, so a
+    # project without its own gets BLOCKED, not a free pass.
+    (repo / ".flow" / "floors.yaml").unlink()
+    p = sh(sys.executable, str(FLOORS), "--base", "main", cwd=repo)
+    assert p.returncode == 2 and "no floors file" in p.stdout
+
+
+def test_floor_uses_the_project_file_not_a_runtime_default(repo):
+    # the floors that decide are the ones in THIS project: a pattern
+    # only this repo declares must trigger, and the WordPress patterns
+    # that used to ship with the runtime must not
+    (repo / ".flow" / "floors.yaml").write_text(
+        "floors:\n  house-style:\n    content: ['MAGIC_TOKEN']\n")
+    # commit the floors file first: a pattern declared in the diff would
+    # match itself, which is a real trap for anyone editing their floors
+    sh("git", "add", "-A", cwd=repo)
+    sh("git", "commit", "-m", "floors", cwd=repo)
+    (repo / "b.txt").write_text("current_user_can();\n")   # old runtime floor
+    sh("git", "add", "-A", cwd=repo)
+    p = sh(sys.executable, str(FLOORS), "--base", "main", cwd=repo)
+    assert p.returncode == 0, p.stdout
+    (repo / "c.txt").write_text("MAGIC_TOKEN\n")
+    sh("git", "add", "-A", cwd=repo)
+    p = sh(sys.executable, str(FLOORS), "--base", "main", cwd=repo)
+    assert p.returncode == 2 and "house-style" in p.stdout
 
 
 # ── seal freshness (--fresh): a decision must still describe what is

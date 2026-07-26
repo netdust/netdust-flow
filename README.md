@@ -53,9 +53,10 @@ The only formula in the system:
 | `flows/deliver.yaml` | brainstorm → spec ⊨gate → plan ⊨gate → **human approval ⊨seal** → build ⟲ ledger → **human shake-out ⊨seal** |
 | `flows/patch.yaml` | build ⟲ suite-green → floors clean → done (floor hit → **human re-dispatch ⊨seal**) |
 
-Dispatch floors route work: anything touching auth, user input,
-schema/migrations, or payments takes `deliver` — no agent override
-downward.
+Dispatch floors route work up: whatever a project declares dangerous
+takes `deliver` — no agent override downward. The floors themselves
+are the project's (`.flow/floors.yaml`), because what is dangerous
+about a codebase is not something a runtime can know.
 
 ## Invariants
 
@@ -144,14 +145,18 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
   rates, executions-to-green, human yields. The journal measures, the
   human adapts, the lint recompiles — nothing feeds back into a flow
   automatically.
-- `bin/floor-check.py` + `floors.yaml` — the dispatch floors as a
-  mechanical diff scan on the patch road; fails closed.
+- `bin/floor-check.py` — the dispatch floors as a mechanical diff scan
+  on the patch road; fails closed on an unresolvable base AND on a
+  missing floors file. The floors are the project's
+  (`.flow/floors.yaml`, bound into the flow as `{floors_file}`); this
+  runtime ships none, having learned the hard way that a default
+  floors file means every project inherits the author's domain.
 - `commands/flow.md` — `/flow` arm · off · status · seal · eval.
 - `examples/` — four small lint-clean flows with expected paths and
   the evidence each generates.
 - `.flow/` — this repo's own project pack (its spec/plan gate). The
   convention has a consumer here so it cannot rot untested.
-- `tests/` — 143 tests (walker + hook integration + evidence + lint +
+- `tests/` — 148 tests (walker + hook integration + evidence + lint +
   arm + eval + project packs), run by CI on Python 3.10–3.12. One CI job
   installs no authoring dependencies at all, which is how the promise
   that the hook path needs no PyYAML stays true.

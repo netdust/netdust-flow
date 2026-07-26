@@ -75,6 +75,9 @@ def run(flow, node, feature, plugin, *extra, flowstub=None):
     if flowstub is not None:
         binds = ["--bind", f"netdust_flow={flowstub}",
                  "--bind", "base_ref=main",
+                 # patch v2: the floors file is the PROJECT's, bound like
+                 # any other project value (the stub gate ignores it)
+                 "--bind", "floors_file=.flow/floors.yaml",
                  "--bind", f"gate_check_cmd={flowstub}/bin/gate-check.py"]
     p = subprocess.run(
         [sys.executable, str(FLOW_CHECK), str(feature),

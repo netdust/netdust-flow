@@ -98,8 +98,11 @@ authoring-side.
   worktree clean. Exit 0/1/2 — it is itself just a gate.
 - `seal.py record|check` writes and reads human decisions on
   `refs/notes/seal`; the check is a gate like any other.
-- `floor-check.py` scans the real diff against the declared floors;
-  an unresolvable base ref fails closed.
+- `floor-check.py` scans the real diff against the project's floors
+  (`.flow/floors.yaml`, bound as `{floors_file}`). Both config faults
+  fail closed: an unresolvable base ref, and a missing floors file —
+  "nothing was scanned" must never read as "clean" on a gate whose job
+  is pushing work up.
 
 ## Trust boundary
 

@@ -55,6 +55,12 @@ NEEDS_BASE = SELF_CONTAINED.replace(
     'run: ".flow/bin/project-gate.py {feature_dir}"',
     'run: ".flow/bin/project-gate.py --base {base_ref}"')
 
+# A floors-scanning gate: the project must own a floors file (v0.5 —
+# the runtime used to ship one, so every project inherited its domain).
+NEEDS_FLOORS = SELF_CONTAINED.replace(
+    'run: ".flow/bin/project-gate.py {feature_dir}"',
+    'run: ".flow/bin/project-gate.py --floors {floors_file}"')
+
 # I2: an agent node may not finish. The lint refuses this; so must arm.
 RED_LINT = """\
 flow: site
@@ -72,7 +78,8 @@ edges:
 
 
 def project(tmp_path, flow_text=SELF_CONTAINED, name="site", *,
-            gate=True, claude_md=None, pack=None, plan=None, tasks=None):
+            gate=True, claude_md=None, pack=None, plan=None, tasks=None,
+            floors=None):
     proj = tmp_path / "site-repo"
     (proj / ".flow" / "flows").mkdir(parents=True, exist_ok=True)
     (proj / ".flow" / "bin").mkdir(parents=True, exist_ok=True)
@@ -84,6 +91,8 @@ def project(tmp_path, flow_text=SELF_CONTAINED, name="site", *,
         (proj / "CLAUDE.md").write_text(claude_md)
     if pack is not None:
         (proj / ".flow" / "pack.yaml").write_text(pack)
+    if floors is not None:
+        (proj / ".flow" / "floors.yaml").write_text(floors)
     if plan is not None or tasks is not None:
         (proj / "feature").mkdir(exist_ok=True)
     if plan is not None:
@@ -287,6 +296,33 @@ def test_resolvable_base_ref_arms(tmp_path):
     rc, out = arm(proj)
     assert rc == 0, out
     assert marker(proj)["binds"]["base_ref"] == "main"
+
+
+def test_missing_project_floors_refuses(tmp_path):
+    # the runtime ships no floors file (v0.5): a project that scans for
+    # dispatch floors must own the answer to "what is dangerous here"
+    proj = project(tmp_path, NEEDS_FLOORS)
+    rc, out = arm(proj)
+    assert rc == 1
+    assert "REFUSED  [floors]" in out
+    assert ".flow/floors.yaml" in out
+    assert not (proj / MARKER_REL).exists()
+
+
+def test_project_floors_are_bound(tmp_path):
+    proj = project(tmp_path, NEEDS_FLOORS,
+                   floors="floors:\n  house:\n    content: ['MAGIC']\n")
+    rc, out = arm(proj)
+    assert rc == 0, out
+    assert marker(proj)["binds"]["floors_file"] == ".flow/floors.yaml"
+
+
+def test_floors_bind_can_be_overridden(tmp_path):
+    proj = project(tmp_path, NEEDS_FLOORS)
+    (proj / "elsewhere.yaml").write_text("floors: {}\n")
+    rc, out = arm(proj, "--bind", "floors_file=elsewhere.yaml")
+    assert rc == 0, out
+    assert marker(proj)["binds"]["floors_file"] == "elsewhere.yaml"
 
 
 @pytest.mark.parametrize("bad", ["novalue", "=empty"])

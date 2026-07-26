@@ -48,7 +48,13 @@ def setup(tmp_path, flow, node, binds=None, extra=None):
               "flow": str(flow), "node": node,
               "flow_check": str(FLOW_CHECK),
               "gate_timeout": 30}
+    # patch v2 runs the REAL floor-check, which fails closed without a
+    # project floors file — the project owns its floors (docs/project-pack.md)
+    (cwd / ".flow").mkdir(parents=True, exist_ok=True)
+    (cwd / ".flow" / "floors.yaml").write_text(
+        "floors:\n  schema:\n    paths: [\"**/migrations/**\"]\n")
     marker["binds"] = {"netdust_flow": str(ROOT), "base_ref": "main",
+                       "floors_file": ".flow/floors.yaml",
                        "gate_check_cmd": str(stubs / "gate-check.py")}
     if binds:
         marker["binds"].update(binds)

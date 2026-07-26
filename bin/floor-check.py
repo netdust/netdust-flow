@@ -6,8 +6,17 @@
 Scans the change (git diff BASE...HEAD plus the working tree) for
 floor patterns. Exit 0: clean — small-road work. Exit 2: a floor
 triggered — this change belongs on the deliver flow; the patch flow
-routes exit != 0 to __human__ so YOU re-dispatch. Floors only ever
-push work UP; there is deliberately no override down.
+routes exit != 0 to a human so YOU re-dispatch. Floors only ever push
+work UP; there is deliberately no override down.
+
+The floors file belongs to the PROJECT, not to this runtime: what is
+dangerous about a codebase is domain knowledge, and a runtime that
+shipped a default would be answering that question for every project
+it drives (it did, until v0.5 — with WordPress patterns). So --floors
+defaults to `.flow/floors.yaml` relative to the working directory, and
+a missing floors file fails CLOSED (exit 2) rather than scanning
+nothing and reporting clean. A floor file nobody wrote is not a floor
+that always passes; it is a question nobody answered.
 """
 from __future__ import annotations
 
@@ -54,9 +63,18 @@ def load_floors(path: Path) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--floors", type=Path,
-                    default=Path(__file__).resolve().parents[1] / "floors.yaml")
+                    default=Path(".flow") / "floors.yaml")
     ap.add_argument("--base", default="main")
     args = ap.parse_args()
+
+    if not args.floors.exists():
+        # Fail CLOSED, same rule as an unresolvable base: no floors file
+        # means nothing was scanned, and "nothing was scanned" must never
+        # read as "clean" on a gate whose whole job is to push work up.
+        print(f"FLOOR: BLOCKED — no floors file at {args.floors} — the "
+              "project owns its floors (docs/project-pack.md); write "
+              "`.flow/floors.yaml` or pass --floors <path>")
+        return 2
 
     floors = load_floors(args.floors)
     rc, merge_base = sh("git", "merge-base", "HEAD", args.base)

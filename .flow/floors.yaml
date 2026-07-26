@@ -1,0 +1,42 @@
+# Dispatch floors — netdust-flow's OWN. Work matching any category
+# below MUST take the deliver road; bin/floor-check.py scans the real
+# diff on the way out of `patch` and routes a hit to a human for
+# re-dispatch. Floors only ever push work UP; there is deliberately no
+# override down.
+#
+# These are THIS repo's floors, in this repo's pack, for the same
+# reason its spec gate is here (docs/project-pack.md): a floor encodes
+# what is dangerous about a particular codebase, and no runtime can
+# know that. Until this file moved here it lived at the repo root and
+# described WordPress — so every project on the patch road inherited
+# netdust-flow's opinion about `wp-login` and Stripe. That file is now
+# examples/wordpress-plugin/floors.yaml, where it is an example
+# instead of a default.
+#
+# A project taking the patch road writes its own .flow/floors.yaml;
+# bin/flow-arm.py refuses to arm without one, because a floor file
+# nobody wrote is a floor that never triggers.
+
+floors:
+  evidence:
+    # attest / ledger / seal — the stores every state transition
+    # derives from. CLAUDE.md: read docs/evidence.md before touching
+    # these. A change here is never a small change.
+    paths: ["bin/attest.py", "bin/ledger.py", "bin/seal.py"]
+    content: ['refs/notes/', 'NOTES_REF']
+
+  trust-boundary:
+    # the hook path and the guard that raises the cost of a forge
+    paths: ["hooks/**"]
+
+  machine:
+    # the walker, the static gate, the schema, and the compiled twins:
+    # the contract every project's flow is written against
+    paths: ["bin/flow-check.py", "bin/flow-lint.py", "bin/flow-arm.py",
+            "flow.schema.json", "flows/*.json"]
+
+  unsafe-execution:
+    # the walker runs gates as argv with a closed condition grammar.
+    # Anything reintroducing a shell or an interpreter to that path is
+    # a floor by itself, wherever it appears.
+    content: ['shell=True', '\beval\(', '\bexec\(']

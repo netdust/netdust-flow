@@ -42,14 +42,19 @@ What it refuses (each names what is missing, never guesses a value):
                 on PATH
   base          the flow scans a diff against a base ref that does not
                 resolve in this repo
+  floors        the flow scans for dispatch floors and the project has
+                no `.flow/floors.yaml`. Floors encode what is dangerous
+                about THIS codebase; a runtime cannot know that, and
+                until v0.5 it shipped a default that pretended to
   armed         a marker is already there; disarm before re-arming, or
                 the live run's identity (and journal continuity) is
                 silently thrown away
 
-Bind values are collected, in increasing precedence: `netdust_flow`
-and `base_ref` defaults, the project CLAUDE.md (`Gate check:` →
-`gate_check_cmd`, `Test suite:` → `test_suite_cmd`), then `--bind`.
-`feature_dir` is never a marker bind — the walker supplies it.
+Bind values are collected, in increasing precedence: the defaults
+(`netdust_flow`, `base_ref`, `floors_file`), the project CLAUDE.md
+(`Gate check:` → `gate_check_cmd`, `Test suite:` → `test_suite_cmd`),
+then `--bind`. `feature_dir` is never a marker bind — the walker
+supplies it.
 
 Authoring-side, like the lint: PyYAML is required here and never in
 the Stop-hook path.
@@ -86,6 +91,7 @@ DEFAULT_MAX_DRY = 2
 # done; termination belongs to the iteration budget there instead.
 NO_PROGRESS_MAX_DRY = 25
 DEFAULT_PLUGIN_ROOT = Path.home() / ".claude" / "plugins" / "netdust-agent"
+PACK_FLOORS_REL = Path(".flow") / "floors.yaml"
 
 # The walker binds this itself from its positional argument; a marker
 # copy would be a second source of truth for the same value.
@@ -392,6 +398,16 @@ def main() -> int:
         binds[key] = value
 
     needed = required_placeholders(doc)
+    if "floors_file" in needed:
+        binds.setdefault("floors_file", str(PACK_FLOORS_REL))
+        if not (project / binds["floors_file"]).exists():
+            r.add("floors", f"`{binds['floors_file']}` does not exist in "
+                            f"{project} — a flow that scans for dispatch "
+                            "floors needs the project's own floors "
+                            "(docs/project-pack.md; "
+                            "examples/wordpress-plugin/floors.yaml is a "
+                            "worked one). A floor file nobody wrote is a "
+                            "floor that never triggers")
     if "base_ref" in needed:
         binds.setdefault("base_ref", "main")
         probe = subprocess.run(["git", "rev-parse", "--verify",
