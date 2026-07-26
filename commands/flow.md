@@ -14,100 +14,76 @@ Resolve `<netdust-flow>` via the stable symlink `~/.claude/netdust-flow`
 
 ## /flow <feature-dir> <flow>  (arm)
 
-`<flow>` is a flow NAME, resolved project-first:
+    python3 <netdust-flow>/bin/flow-arm.py <feature-dir> <flow>
 
-1. `.flow/flows/<flow>.yaml` in the project — a flow the project owns,
-   naming gates the project owns (`.flow/bin/…`, resolved relative to
-   the project root). This is the normal case for any project with
-   domain-specific checks: the runtime supplies the machine, the
-   project supplies the checks. See `docs/project-pack.md`.
-2. `<netdust-flow>/flows/<flow>.yaml` — the built-in roads (`deliver`,
-   `patch`), which are domain-independent by construction.
+That is the whole step: run it, show its output verbatim, and stop if
+it refused. Do not write `tasks/.harness-loop.json` by hand.
 
-A name present in both resolves to the project's, and you must say so
-in the arm confirmation. A path argument (`./somewhere/x.yaml`) is
-taken literally. Whichever wins, the marker records the resolved
-absolute path to its compiled `.json` twin — never the bare name, so a
-later `/flow status` cannot silently bind a different file.
+Arming used to be six preconditions written out here and executed by
+goodwill — the one assertion the system never checked, in a system
+whose whole thesis is that assertions are not signals. It is code now,
+and it refuses rather than guesses:
 
-Preconditions — refuse to arm (say why) if any fails:
+| It refuses when | Was |
+| --- | --- |
+| `<flow>` resolves to nothing | precondition 1 |
+| the flow FAILs `flow-lint --compile` | precondition 1 |
+| a gate names a program that exists nowhere the walker looks | precondition 1b |
+| a `{placeholder}` used by a gate has no value | preconditions 1c, 2, 5 |
+| `.flow/pack.yaml` requires a tool that is not on PATH | precondition 1c |
+| a `{base_ref}` diff base does not resolve in the repo | new — used to fail mid-run |
+| `--node` names a node the flow does not declare | new |
+| a marker is already there | new — re-arming discarded the live run's id |
 
-1. **Lint + twin fresh:** run
-   `python3 <netdust-flow>/bin/flow-lint.py <resolved flow>.yaml --compile`
-   — exit 0 required (needs PyYAML + jsonschema, authoring-side only).
-   The walker reads the `.json` twin; a stale or FAIL-ing flow must
-   never drive a run. This applies to a project-owned flow exactly as
-   it does to a built-in one: a project does not get to skip the lint
-   by keeping its flow in its own repo.
-1b. **project flow — every gate must exist:** for a `.flow/` flow,
-   each gate's program must resolve (project root first, then the
-   plugin root) and be executable. A flow naming a gate that is not
-   there fails at the worst possible moment — mid-run, as a BLOCKED
-   walk — so it is refused at arm time instead. Run
-   `python3 <netdust-flow>/bin/flow-lint.py <flow>.yaml --check-gates
-   --project .`
-1c. **project flow — binds:** a project flow declares the binds it
-   needs in `.flow/pack.yaml` (`binds:`). Every one must resolve at arm
-   time or refuse — an unbound `{placeholder}` BLOCKS the walk anyway,
-   so discovering it now costs one line instead of a dead run.
-2. **deliver — the gate command:** the project defines the spec/plan
-   gate command (`Gate check:` line in the project CLAUDE.md, or ask
-   the human once) — bound as `gate_check_cmd`, it drives `gate-spec`
-   and `gate-plan`. No gate command → no spec/plan gates → refuse.
-3. **deliver, arming mid-flow only:** when arming at a node past
-   `plan` (grafting onto an existing plan), `<feature-dir>/tasks.md`
-   must exist with `- [ ] Tnn` lines and the gate command must exit 0
-   first — a walker on a gate-failing plan grinds a defective plan.
-   Arming at `__start__` needs neither: the flow itself produces spec
-   and plan and gates them on the way. (Run 0001 finding F1: the old
-   precondition demanded tasks.md for every deliver arm, which a
-   from-scratch run cannot satisfy.)
-4. **deliver — review is evidence (I5):** the plan must carry a
-   review cluster — at least one task whose check IS an independent
-   review run, attested like any other task (e.g. `T08 independent
-   review: security + correctness`). A reviewer that is not a ledger
-   task did not happen (run 0001 finding F4); the project's gate
-   command should FAIL a tasks.md without one.
-5. **patch only — bindings:** the project defines the suite command
-   (`Test suite:` line in the project CLAUDE.md, or ask the human once).
-   No suite command → no exit gate → refuse. Floors are no longer
-   convention: gate-floors scans the real diff on the way out and
-   routes floor-touching work to you for re-dispatch to deliver.
-6. **deliver — evidence, not checkboxes:** completion derives from git
-   attest notes (bin/attest.py records; bin/ledger.py answers).
-   Checkbox state in tasks.md is a display mirror the ledger ignores;
-   agents attest units by running their checks through attest.py.
+Note the fourth row: the old per-flow rules ("deliver needs a gate
+command", "patch needs a suite command") are consequences of one
+generic rule now, so a NEW flow gets the same protection without
+anyone writing it a new paragraph here.
 
-Then:
+`<flow>` is a NAME, resolved project-first — `.flow/flows/<flow>.yaml`
+in the project (a flow the project owns, naming gates the project
+owns; see `docs/project-pack.md`), then `<netdust-flow>/flows/<flow>.yaml`
+(the built-in roads, domain-independent by construction). A name in
+both resolves to the project's and the confirmation says so. A path
+argument is taken literally. The marker always records the resolved
+ABSOLUTE path to the compiled twin, never the bare name, so a later
+`/flow status` cannot silently bind a different file.
 
-1. Read `Loop budget: ~N` from `<feature-dir>/plan.md` when present;
-   default 25.
-2. Write `tasks/.harness-loop.json`:
+Bind values, in increasing precedence: `netdust_flow` and `base_ref`
+(default `main`, verified to resolve); the project CLAUDE.md
+(`Gate check:` → `gate_check_cmd`, `Test suite:` → `test_suite_cmd`);
+then `--bind NAME=VALUE`. `feature_dir` is never a marker bind — the
+walker supplies it. Pass `--node <id>` to graft onto an existing run,
+`--budget`/`--max-dry` to override what it derives.
 
-   ```
-   {"feature_dir": "<feature-dir>", "iteration": 0, "max_iterations": N,
-    "last_done": 0, "dry": 0,
-    "flow": "<resolved flow dir>/<flow>.json", "node": "__start__",
-    "flow_check": "<netdust-flow>/bin/flow-check.py",
-    "binds": {"netdust_flow": "<netdust-flow>",
-              "gate_check_cmd": "<cmd>",      # deliver: spec/plan gates
-              "test_suite_cmd": "<cmd>",      # patch + deliver SUITE attest
-              "base_ref": "main"},            # patch: floor-check diff base
-    "max_dry": 25,                            # patch only: budget-governed
-    "gate_timeout": 600}
-   ```
+It also prepares what the run needs and cannot recover afterwards: the
+feature dir (the hook journals into it fail-open, so a missing dir
+loses the whole run journal silently) and the two `.gitignore` lines.
+Budget comes from `Loop budget:` in plan.md, default 25. `max_dry` is
+derived — 2 when the run has or will produce a `tasks.md` for the
+walker to count, 25 when it will not, because a near-constant
+`progress:` line would otherwise disarm a healthy run.
 
-   (patch has no tasks.md, so its `progress:` line is node-based and
-   nearly constant — `max_dry: 25` hands termination to the iteration
-   budget instead of the dry-loop counter. deliver keeps the default 2.)
-3. Ensure `.gitignore` contains `tasks/.harness-loop.json` AND
-   `.flow-journal.jsonl` (the hook appends run-journal events to
-   `<feature-dir>/.flow-journal.jsonl`; tracked, it would dirty the
-   worktree mid-run and the ledger's clean-tree check could never
-   pass).
-4. Confirm to the user in two lines: armed, flow, budget, and how it
-   ends (FINISHED at a gate → disarms · human node → yields with the
-   ask · budget/dry → disarms · `/flow off` anytime).
+Two things it deliberately does NOT check, because neither is
+mechanical at arm time:
+
+- **I5, the review cluster.** The plan must carry at least one task
+  whose check IS an attested independent review (run 0001 finding F4).
+  The project's gate command enforces that against the real plan —
+  `.flow/bin/spec-gate.py` does it here — and `gate-plan` runs it on
+  the way through. Arming would only duplicate a check the flow
+  already makes.
+- **Grafting mid-flow.** `--node <id>` past the plan node is legal and
+  arm verifies only that the node is declared. A walker on a
+  gate-failing plan grinds a defective plan, so run the gate command
+  yourself first; arm at `__start__` unless you mean to skip the
+  stages before it.
+
+And one thing worth repeating because it is what the whole road is
+for: completion derives from git attest notes (`bin/attest.py`
+records, `bin/ledger.py` answers). Checkbox state in tasks.md is a
+display mirror the ledger ignores — agents attest units by running
+their checks through attest.py.
 
 Then start (or continue) working the CURRENT node normally. Nothing else
 changes: review-gate HALTs, tiers, and the subagent-stop backstop all

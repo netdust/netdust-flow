@@ -7,6 +7,9 @@ covers) lives in the commands gates run and the craft agents
 reference, outside this layer.
 
 ```
+      flow-arm.py      (arming: writes the marker, or refuses)
+          |
+          v
 Claude Code Stop hook  (hooks/loop-gate.py)
           |
           v
@@ -17,6 +20,33 @@ Claude Code Stop hook  (hooks/loop-gate.py)
      /     |     \
  Agent   Gate   Human
 ```
+
+## Arming (`bin/flow-arm.py`)
+
+The marker (`tasks/.harness-loop.json`) is the only input to the whole
+machine — it names the flow, the start node, the gate commands and the
+budget — and everything downstream refuses to guess about it. Arming
+is where that file is proven before it is written: the flow resolves
+(project `.flow/flows/` first, then the built-in roads), lints clean
+and compiles its twin, every gate program exists where the walker
+would look for it (project root · plugin root · PATH), every
+`{placeholder}` a gate uses has a value, `.flow/pack.yaml`'s required
+tools are present, and any `{base_ref}` resolves in the repo. Any one
+of those failing is a refusal naming what is missing — not a marker.
+
+The generic placeholder rule replaces what used to be per-flow prose:
+deliver's `{gate_check_cmd}` and patch's `{test_suite_cmd}` are the
+same refusal, so a new flow inherits the protection without anyone
+writing it a new precondition.
+
+Two side effects belong here rather than mid-run: the feature dir is
+created (the hook journals into it fail-open — a missing dir loses the
+run journal silently) and the `.gitignore` entries for the marker and
+the journal are ensured. `max_dry` is derived from whether the run
+will have a `tasks.md` to count, which is the first mechanical
+consumer of a node's `out:` declarations.
+
+Authoring-side, like the lint: PyYAML, never in the hook path.
 
 ## The Stop hook (`hooks/loop-gate.py`)
 

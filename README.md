@@ -116,6 +116,13 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
   by the lint (typo'd keys fail via `additionalProperties: false`).
 - `bin/flow-lint.py` — static gate: schema, graph, determinism,
   I1/I2/I4, gate results actually consumed by their out-edges.
+- `bin/flow-arm.py` — arming as verification: resolves the flow
+  project-first, lints and compiles it, proves every gate program
+  exists and every `{placeholder}` has a value, then writes the
+  marker. The marker is the only input to the machine, and it used to
+  be written by hand from prose preconditions — the one assertion the
+  system never checked. Refuses with a named reason instead of arming
+  a run that would BLOCK twenty minutes in.
 - `bin/flow-check.py` — the walker: stateless, closed condition
   grammar, gates run as argv (no shell, no eval), every config problem
   BLOCKS instead of guessing.
@@ -144,8 +151,8 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
   the evidence each generates.
 - `.flow/` — this repo's own project pack (its spec/plan gate). The
   convention has a consumer here so it cannot rot untested.
-- `tests/` — 123 tests (walker + hook integration + evidence + lint +
-  eval + project packs), run by CI on Python 3.10–3.12. One CI job
+- `tests/` — 143 tests (walker + hook integration + evidence + lint +
+  arm + eval + project packs), run by CI on Python 3.10–3.12. One CI job
   installs no authoring dependencies at all, which is how the promise
   that the hook path needs no PyYAML stays true.
 

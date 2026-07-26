@@ -5,8 +5,8 @@ The evidence-driven delivery runtime. Read `README.md` for the claim,
 
 ## Flow bindings
 
-These two lines are read by `/flow` at arm time. Without them the
-walker refuses to arm on this repo — which is the correct behaviour,
+These two lines are parsed by `bin/flow-arm.py` at arm time. Without
+them arming is REFUSED on this repo — which is the correct behaviour,
 and was the state of this repo until they were added.
 
     Gate check: python3 .flow/bin/spec-gate.py
