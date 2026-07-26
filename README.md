@@ -46,12 +46,13 @@ artifact.**
 The only formula in the system:
 `assertion → verification → evidence → state transition`.
 
-## The two flows
+## The roads
 
 | Flow | Road |
 | --- | --- |
 | `flows/deliver.yaml` | brainstorm → spec ⊨gate → plan ⊨gate → **human approval ⊨seal** → build ⟲ ledger → **human shake-out ⊨seal** |
 | `flows/patch.yaml` | build ⟲ suite-green → floors clean → done (floor hit → **human re-dispatch ⊨seal**) |
+| `flows/improve-skill.yaml` | propose → coverage ⊨gate → eval ⊨gate → review ⊨gate → **human adopt ⊨seal** → prune |
 
 Dispatch floors route work up: whatever a project declares dangerous
 takes `deliver` — no agent override downward. The floors themselves
@@ -108,6 +109,7 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
 | [`docs/theory.md`](docs/theory.md) | The research verdict: sources, debate, confidence, limitations. |
 | [`docs/runs.md`](docs/runs.md) | The run ledger — every flow-driven delivery, measured. |
 | [`docs/project-pack.md`](docs/project-pack.md) | How a project owns its own flow and gates — the runtime supplies the machine, never the checks. |
+| [`docs/craft-loop.md`](docs/craft-loop.md) | Improving the craft itself: memory, skill-eval, and the `improve-skill` road. |
 | [`docs/examples.md`](docs/examples.md) | Index of the example flows under `examples/`. |
 
 ## Parts
@@ -146,6 +148,13 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
   carries the next node's craft by name.
 - `bin/attest.py` / `bin/ledger.py` — evidence recorded by the
   verifier into git notes; delivery state derived on request.
+- `bin/review-check.py` — the check an I5 review task runs through
+  attest.py: a report exists, its verdict is CLEAN, and it is bound to
+  the exact tree it reviewed. Run 0002's caught defect came through
+  here — a review of yesterday's code proves nothing about today's.
+- `bin/craft-memory.py` / `bin/skill-eval.py` + `flows/improve-skill.yaml`
+  — the craft loop: craft that earns its place by measurement rather
+  than by being declared. See `docs/craft-loop.md`.
 - `bin/seal.py` — human decisions as evidence (I4): `record` writes a
   decision into git notes, `check` reads the latest back as an exit
   code for the seal gate after each human node. `check --fresh` also

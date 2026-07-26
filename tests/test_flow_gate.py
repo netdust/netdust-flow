@@ -5,6 +5,7 @@ Conventions: subprocess the hook with a stdin payload, control the
 world through files, assert on stdout JSON + marker state. The hook
 must always exit 0 (fail-open)."""
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -225,7 +226,7 @@ def test_run_id_unique_across_concurrent_runs(tmp_path):
         run_gate(cwd, home)
         ids.add(marker_of(cwd)["run_id"])
     assert len(ids) == 8, f"run ids collided: {sorted(ids)}"
-    assert all(rid.startswith("r20") and len(rid.split("-")) == 3
+    assert all(re.fullmatch(r"r\d{8}-\d{6}-[0-9a-f]{4}", rid)
                for rid in ids), sorted(ids)
 
 
@@ -268,3 +269,21 @@ def test_hook_path_scripts_import_nothing_third_party():
     for name in ("bin/flow-check.py", "hooks/loop-gate.py"):
         extra = _toplevel_imports(ROOT / name) - STDLIB_OK - {"flowspec"}
         assert not extra, f"{name} is in the hook path; it may not import {extra}"
+
+
+def test_no_test_name_is_shadowed():
+    """Two functions with one name means Python keeps the last and the
+    earlier one never runs — coverage silently deleted, suite still
+    green. This merge produced exactly that twice (a branch's F1/F2
+    tests landing beside main's), so it is a check now rather than a
+    thing someone has to notice."""
+    import ast
+    import collections
+    shadowed = {}
+    for path in sorted((ROOT / "tests").glob("test_*.py")):
+        names = [n.name for n in ast.parse(path.read_text()).body
+                 if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]
+        dupes = [n for n, c in collections.Counter(names).items() if c > 1]
+        if dupes:
+            shadowed[path.name] = dupes
+    assert not shadowed, f"shadowed test functions: {shadowed}"
