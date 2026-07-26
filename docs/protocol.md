@@ -15,7 +15,10 @@ keys rejected):
 ```yaml
 - id: kebab-case-id      # unique (lint)
   kind: agent            # agent | gate | human
-  craft: [agents/x]      # agent: required (lint) — referenced, never embedded
+  craft: [agents/x]      # agent: required (lint) — referenced, never
+                         # embedded; must RESOLVE (lint --check-craft):
+                         # project `.flow/craft/` first, then the
+                         # plugin root, same order as a gate program
   in:  [spec.md]         # optional: declared inputs
   out: [plan.md]         # optional: declared outputs
 
@@ -91,10 +94,41 @@ disarm — **runtime**.
 - Every run appends a journal of gate exits and stop decisions;
   red exits exist nowhere else. **runtime (hook, fail-open)**
 
+## Composition
+
+A flow may derive from another — **lint**, resolved at compile time:
+
+```yaml
+flow: wp-plugin
+version: 2
+extends: deliver         # NAME (project pack first, then the roads)
+remove: [brainstorm]     # nodes, and every edge that touches them
+nodes: [...]             # merged by id: same id replaces, new appends
+edges: [...]             # replaces the parent's edges FROM each source
+                         # node the child mentions — one routing
+                         # decision, one routing table
+```
+
+Two rules keep this from becoming a second protocol:
+
+1. **The twin is flat.** `extends` is resolved by the lint before the
+   twin is written, so the runtime has exactly one notion of what a
+   flow is and the walker never learns composition exists. A derived
+   flow costs the hook path nothing.
+2. **The derived graph faces the whole lint** — reachability, dead
+   ends, deterministic routing, I1/I2/I4. Composition cannot smuggle a
+   node past an invariant; a `remove` that breaks the wiring fails
+   statically, which is the only reason this is safe to offer at all.
+
+`flow` and `version` always come from the child: a derived road is its
+own road, with its own eval cohort.
+
 ## Versioning
 
 A flow's identity is the content hash of its compiled `.json` twin.
 Editing the YAML and recompiling produces a new hash; runs journal the
 hash they were driven by, so cohorts in the eval are attributable to
-an exact protocol instance. The YAML file is the only durable asset —
-the runtime is replaceable.
+an exact protocol instance. Because the twin is flattened, editing a
+PARENT flow changes every derived flow's hash on the next compile —
+correctly: the road really did change. The YAML file is the only
+durable asset — the runtime is replaceable.

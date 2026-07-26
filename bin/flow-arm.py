@@ -53,8 +53,9 @@ What it refuses (each names what is missing, never guesses a value):
 Bind values are collected, in increasing precedence: the defaults
 (`netdust_flow`, `base_ref`, `floors_file`), the project CLAUDE.md
 (`Gate check:` → `gate_check_cmd`, `Test suite:` → `test_suite_cmd`),
-then `--bind`. `feature_dir` is never a marker bind — the walker
-supplies it.
+`.flow/pack.yaml`'s `binds.<name>.value` (flow-specific, so it beats
+the repo-wide line), then `--bind`. `feature_dir` is never a marker
+bind — the walker supplies it.
 
 Authoring-side, like the lint: PyYAML is required here and never in
 the Stop-hook path.
@@ -64,11 +65,13 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import flowspec  # noqa: E402
 
 try:
     import yaml
@@ -91,7 +94,8 @@ DEFAULT_MAX_DRY = 2
 # done; termination belongs to the iteration budget there instead.
 NO_PROGRESS_MAX_DRY = 25
 DEFAULT_PLUGIN_ROOT = Path.home() / ".claude" / "plugins" / "netdust-agent"
-PACK_FLOORS_REL = Path(".flow") / "floors.yaml"
+PACK_DIR = Path(".flow")
+PACK_FLOORS_REL = PACK_DIR / "floors.yaml"
 
 # The walker binds this itself from its positional argument; a marker
 # copy would be a second source of truth for the same value.
@@ -145,15 +149,40 @@ def twin_of(src: Path) -> Path:
     return src if src.suffix == ".json" else src.with_suffix(".json")
 
 
-def run_lint(src: Path, project: Path) -> tuple[bool, str]:
-    """The lint owns the graph verdict AND writes the twin the walker
-    reads. Arming past a red lint would put a flow on the road that the
-    static gate already refused."""
-    argv = [sys.executable, str(RUNTIME / "bin" / "flow-lint.py"), str(src)]
+def run_lint(src: Path, project: Path, plugin_root: Path,
+             binds: dict[str, str], feature_dir: Path) -> tuple[bool, str]:
+    """The lint owns the graph verdict, the gate-and-craft resolution
+    checks, AND the twin the walker reads. Arming calls it with the
+    binds resolved, so `{gate_check_cmd}` is checked for real instead
+    of warned about — and arming does not reimplement any of it, which
+    is how the two answers stay the same answer.
+
+    `feature_dir` is passed as a bind for checking only: it is the
+    walker's to supply at run time, but leaving it standing here would
+    make every gate that takes it look unresolvable and skip the check
+    — which is nearly all of them."""
+    argv = [sys.executable, str(RUNTIME / "bin" / "flow-lint.py"), str(src),
+            "--check-gates", "--check-craft",
+            "--project", str(project), "--plugin-root", str(plugin_root)]
     if src.suffix != ".json":
         argv.append("--compile")
+    for key, value in {**binds, "feature_dir": str(feature_dir)}.items():
+        argv += ["--bind", f"{key}={value}"]
     p = subprocess.run(argv, capture_output=True, text=True, cwd=str(project))
     return p.returncode == 0, (p.stdout + p.stderr).strip()
+
+
+def lint_findings(output: str, status: str) -> list[tuple[str, str]]:
+    """The lint's own `FAIL  [check]  detail` lines, parsed back out so
+    a gates problem is still reported as one instead of collapsing into
+    a generic lint failure."""
+    out = []
+    prefix = f"{status}  ["
+    for line in output.splitlines():
+        if line.startswith(prefix):
+            check, _, detail = line[len(prefix):].partition("]  ")
+            out.append((check.strip() or "lint", detail.strip()))
+    return out
 
 
 # ── bind collection ──────────────────────────────────────────────────
@@ -183,76 +212,52 @@ def required_placeholders(doc: dict) -> set[str]:
     return names - WALKER_BINDS
 
 
-# ── gate programs, resolved the way the walker resolves them ─────────
-
-def program_exists(token: str, project: Path, plugin_root: Path) -> bool:
-    candidate = Path(token)
-    if candidate.is_absolute():
-        return candidate.exists()
-    if (project / token).exists() or (plugin_root / token).exists():
-        return True
-    return shutil.which(token) is not None
-
-
-def check_gates(doc: dict, binds: dict[str, str], feature_dir: Path,
-                project: Path, plugin_root: Path, r: Refusals) -> None:
-    """A gate whose program is missing surfaces mid-run as a BLOCKED
-    walk, which reads like a flow defect and costs a whole arming to
-    diagnose. Resolution mirrors flow-check.run_gate: substitute binds
-    into the WHOLE command, split it, then resolve argv[0] project-root
-    first. Scripts passed to an interpreter (`python3 x/y.py`) are
-    checked too — argv[0] is on PATH there, and the thing that actually
-    goes missing is the script.
-
-    `feature_dir` is substituted here even though it is never a marker
-    bind: the walker supplies it at run time, and leaving it standing
-    would make every gate that takes it look unresolvable and skip the
-    check — which is nearly all of them."""
-    binds = {**binds, "feature_dir": str(feature_dir)}
-    for node in doc.get("nodes", []) or []:
-        if not isinstance(node, dict) or node.get("kind") != "gate":
-            continue
-        nid = node.get("id")
-        cmd = str(node.get("run", ""))
-        for key, value in binds.items():
-            cmd = cmd.replace("{" + key + "}", value)
-        if PLACEHOLDER_RE.search(cmd):
-            continue  # already refused by the binds check; one voice per fault
-        try:
-            argv = shlex.split(cmd)
-        except ValueError as exc:
-            r.add("gates", f"gate `{nid}` command does not parse ({exc})")
-            continue
-        if not argv:
-            r.add("gates", f"gate `{nid}` has an empty `run:`")
-            continue
-        if not program_exists(argv[0], project, plugin_root):
-            r.add("gates", f"gate `{nid}` names `{argv[0]}`, which is not "
-                           f"under {project}, the plugin root, or PATH")
-            continue
-        for token in argv[1:]:
-            if token.endswith(SCRIPT_SUFFIXES) and not program_exists(
-                    token, project, plugin_root):
-                r.add("gates", f"gate `{nid}` runs `{token}`, which is not "
-                               f"under {project}, the plugin root, or PATH")
-
-
 # ── pack ─────────────────────────────────────────────────────────────
 
-def load_pack(project: Path) -> dict:
-    path = project / ".flow" / "pack.yaml"
+def load_pack(project: Path, r: Refusals) -> dict:
+    """`.flow/pack.yaml` is a real artifact with a real schema, not a
+    README with colons in it: an invalid pack refuses the arm here
+    rather than quietly failing to supply a bind later."""
+    path = project / PACK_DIR / "pack.yaml"
     if not path.exists():
         return {}
     try:
-        return yaml.safe_load(path.read_text()) or {}
-    except Exception:
-        return {"__unparseable__": True}
+        pack = yaml.safe_load(path.read_text()) or {}
+    except Exception as exc:
+        r.add("pack", f"{path} does not parse ({exc})")
+        return {}
+    if not isinstance(pack, dict):
+        r.add("pack", f"{path}: top level must be a mapping")
+        return {}
+    try:
+        import jsonschema
+        schema = json.loads((RUNTIME / "pack.schema.json").read_text())
+        for err in sorted(
+                jsonschema.Draft202012Validator(schema).iter_errors(pack),
+                key=str):
+            where = "/".join(str(p) for p in err.absolute_path) or "<root>"
+            r.add("pack", f"pack.yaml: {where}: {err.message}")
+    except ImportError:  # pragma: no cover — authoring hosts have it
+        pass
+    return pack
 
 
-def check_requires(pack: dict, r: Refusals) -> list[str]:
+def binds_from_pack(pack: dict) -> dict[str, str]:
+    """A pack may supply its own bind values, which is what lets a
+    project be self-contained instead of leaning on a CLAUDE.md
+    convention it may not follow."""
+    declared = pack.get("binds")
+    if not isinstance(declared, dict):
+        return {}
+    return {name: str(spec["value"])
+            for name, spec in declared.items()
+            if isinstance(spec, dict) and spec.get("value") is not None}
+
+
+def check_requires(pack: dict, r: Refusals) -> list[tuple[str, str]]:
     """`requires:` is the pack saying which tools its gates shell out
     to. Missing ones fail the gate later; naming them now is free."""
-    warnings: list[str] = []
+    warnings: list[tuple[str, str]] = []
     for entry in pack.get("requires", []) or []:
         if not isinstance(entry, dict) or not entry.get("name"):
             continue
@@ -262,7 +267,7 @@ def check_requires(pack: dict, r: Refusals) -> list[str]:
         why = entry.get("why", "")
         detail = f"`{name}` is not on PATH" + (f" — {why}" if why else "")
         if entry.get("optional"):
-            warnings.append(detail)
+            warnings.append(("requires", detail))
         else:
             r.add("requires", detail)
     return warnings
@@ -359,16 +364,19 @@ def main() -> int:
         r.report()
         return 1
 
-    ok, lint_out = run_lint(src, project)
-    if not ok:
-        r.add("lint", f"{src} does not lint clean — a flow the static gate "
-                      "refused must never drive a run")
-        r.report()
-        print(lint_out)
-        return 1
-
     twin = twin_of(src)
-    doc = yaml.safe_load(src.read_text())
+    try:
+        # Flattened here too: `extends:` is resolved at compile time, and
+        # arm has to see the same complete graph the lint will, or it
+        # would look for placeholders in half a road.
+        doc = flowspec.flatten(
+            yaml.safe_load(src.read_text()),
+            lambda p: yaml.safe_load(p.read_text()),
+            src.parent, project, RUNTIME)
+    except flowspec.ExtendsError as exc:
+        r.add("extends", f"{src.name}: {exc}")
+        r.report()
+        return 1
 
     nodes = {str(n.get("id")) for n in doc.get("nodes", []) or []
              if isinstance(n, dict)}
@@ -376,14 +384,12 @@ def main() -> int:
         r.add("node", f"`{args.node}` is not a node in {src.name} "
                       f"(declared: {', '.join(sorted(nodes))})")
 
-    pack = load_pack(project)
-    if pack.get("__unparseable__"):
-        r.add("pack", f"{project}/.flow/pack.yaml does not parse")
-        pack = {}
+    pack = load_pack(project, r)
     warnings = check_requires(pack, r)
 
     binds: dict[str, str] = {"netdust_flow": str(RUNTIME)}
     binds.update(binds_from_claude_md(project))
+    binds.update(binds_from_pack(pack))   # pack beats the repo-wide line
     for raw in args.bind:
         if "=" not in raw:
             r.add("binds", f"bad --bind `{raw}` (NAME=VALUE)")
@@ -429,12 +435,24 @@ def main() -> int:
         r.add("binds", f"`{{{name}}}` is used by a gate but has no value"
                        + (f" — {hint}" if hint else "") + " (or --bind it)")
 
-    check_gates(doc, binds, feature_dir, project,
-                args.plugin_root.expanduser(), r)
-
     if r:
+        # Refuse before linting: the lint would compile a twin for a
+        # flow that is not going to drive anything, and an unbound
+        # placeholder makes its gate check unanswerable anyway.
         r.report()
         return 1
+
+    ok, lint_out = run_lint(src, project, args.plugin_root.expanduser(),
+                            binds, feature_dir)
+    if not ok:
+        found = lint_findings(lint_out, "FAIL")
+        for check, detail in (found or [("lint", f"{src.name} does not lint "
+                                         "clean — a flow the static gate "
+                                         "refused must never drive a run")]):
+            r.add(check, detail)
+        r.report()
+        return 1
+    warnings += lint_findings(lint_out, "WARN")
 
     # Nothing below here can refuse; the marker is written now.
     (project / feature_dir).mkdir(parents=True, exist_ok=True)
@@ -464,8 +482,8 @@ def main() -> int:
     print(f"armed   {doc.get('flow')} ({origin}: {twin}) at `{args.node}`")
     print(f"        feature={feature_dir} budget={budget} max_dry={max_dry} "
           f"binds={', '.join(sorted(binds))}")
-    for detail in warnings:
-        print(f"WARN    [requires]  {detail}")
+    for check, detail in warnings:
+        print(f"WARN    [{check}]  {detail}")
     if ignored:
         print(f"        .gitignore += {', '.join(ignored)}")
     print("ends    FINISHED at a gate disarms · a human node yields · "

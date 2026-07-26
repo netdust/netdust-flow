@@ -107,6 +107,19 @@ def journal(feature_dir: Path, base: dict, events: list[dict]) -> None:
         pass
 
 
+def read_craft(stdout: str) -> str | None:
+    """The walker names the craft the next node declares. Passing it
+    into the block reason costs one line of context and removes the
+    excuse: before this, the reason said "with its declared craft"
+    without ever saying WHICH, so the agent had to open the marker,
+    find the twin and read the node — and run 0001 (F4) is what
+    happens when it does not."""
+    for line in stdout.splitlines():
+        if line.startswith("craft: "):
+            return line[len("craft: "):].strip() or None
+    return None
+
+
 def read_progress(stdout: str) -> int | None:
     for line in stdout.splitlines():
         if line.startswith("progress: done="):
@@ -240,9 +253,13 @@ def main() -> None:
          "reason": reason[:200]}])
 
     log(f"block iter={iteration}/{max_iter} done={done} detail={reason!r}")
+    craft = read_craft(check.stdout)
     guidance = (
-        "Work the named node with its declared craft only; HALT at "
-        "── REVIEW GATE ── markers as normal. To stop the loop, delete "
+        (f"Craft for this node: {craft}. Work the node with that craft "
+         "only; " if craft else
+         "Work the named node with its declared craft only; ")
+        + "HALT at ── REVIEW GATE ── markers as normal. To stop the loop, "
+          "delete "
     )
     print(json.dumps({
         "decision": "block",

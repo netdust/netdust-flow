@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://netdust.be/pack.schema.json",
+  "title": "netdust-flow project pack",
+  "description": "`.flow/pack.yaml` — what a project's pack needs bound, and which tools its gates shell out to. Validated by bin/flow-arm.py at arm time; a pack that does not validate refuses the arm rather than surfacing as a BLOCKED walk later.",
+  "type": "object",
+  "required": ["pack", "description"],
+  "additionalProperties": false,
+  "properties": {
+    "pack":        { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "description": { "type": "string", "minLength": 1 },
+    "binds": {
+      "type": "object",
+      "description": "Every {placeholder} this pack's flows use. A bind with a `value` is supplied by the pack itself; one without is expected from the project CLAUDE.md or --bind, and its `description` becomes the hint when it is missing.",
+      "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["description"],
+        "additionalProperties": false,
+        "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "example":     { "type": "string" },
+          "value":       { "type": "string" }
+        }
+      }
+    },
+    "requires": {
+      "type": "array",
+      "description": "Tools the pack's gates shell out to. A missing one refuses the arm; `optional: true` downgrades it to a warning.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name":     { "type": "string", "minLength": 1 },
+          "why":      { "type": "string" },
+          "optional": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

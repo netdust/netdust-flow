@@ -1,0 +1,35 @@
+# netdust-flow's own project pack. This repo is a project like any
+# other (docs/project-pack.md): the runtime lives in bin/ and hooks/,
+# and everything that knows what "green" means HERE lives under .flow/.
+#
+# The convention has a consumer in its own repo on purpose — a pack
+# format nobody uses is a pack format that rots. This one is validated
+# against pack.schema.json by bin/flow-arm.py on every arm, and by the
+# suite on every commit.
+
+pack: netdust-flow
+description: >-
+  the evidence-driven delivery runtime, developing itself with the
+  machine it ships
+
+binds:
+  gate_check_cmd:
+    description: >-
+      the spec/plan structure gate — drives gate-spec and gate-plan,
+      and enforces I5 (a plan with no review cluster is refused)
+    example: python3 .flow/bin/spec-gate.py
+  test_suite_cmd:
+    description: >-
+      the command that proves the suite is green; attested as SUITE on
+      the finishing HEAD and run again on the way out
+    example: make test
+
+# Both values come from the `Gate check:` / `Test suite:` lines in
+# CLAUDE.md, which is this repo's single source for them — a pack may
+# instead carry `value:` here and be self-contained, which is the right
+# choice for a project without that convention.
+
+requires:
+  - {name: python3, why: "every gate and every evidence tool"}
+  - {name: git, why: "attest / ledger / seal read and write git notes"}
+  - {name: make, why: "the suite command", optional: true}

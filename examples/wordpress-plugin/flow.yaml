@@ -1,51 +1,43 @@
 # examples/wordpress-plugin — a trimmed deliver road for a small
 # plugin: spec-gated, ledger-driven build, human shake-out seal.
-# (The full production road is flows/deliver.yaml; this variant drops
-# the brainstorm and plan-approval stages for plugin-sized work.)
+#
+# v2: DERIVED from the full road with `extends:` instead of copied from
+# it. The five nodes this example shares with deliver — gate-spec,
+# build, gate-ledger, shakeout, gate-acceptance — are inherited now, so
+# a fix to the long road reaches this one on the next compile. Copying
+# is how the same graph comes to exist in four places, each aging
+# separately.
+#
+# What it changes: no brainstorm (the spec node writes the plan too),
+# no plan-approval seal (plugin-sized work), no [HUMAN]-task unblock
+# lane — so gate-ledger's non-zero exits all route back to build.
+#
+# Composition is resolved by flow-lint at COMPILE time; the twin holds
+# the complete graph and the walker never learns `extends` exists.
 
 flow: example-wp-plugin
-version: 1
+version: 2
+extends: deliver
 
-state:
-  gate: {}
+remove:
+  - brainstorm          # the spec node writes idea, spec and plan
+  - plan                # …so the separate plan stage goes with it
+  - gate-plan
+  - approve-plan        # plugin-sized: no plan-approval seal
+  - gate-approval
+  - unblock             # no [HUMAN] task lane on this road
 
 nodes:
-  - id: spec
-    kind: agent
+  - id: spec            # replaces deliver's spec by id: one agent node
+    kind: agent         # produces the whole planning set
     craft: [skills/spec-authoring]
     out: [spec.md, plan.md, tasks.md]
 
-  - id: gate-spec         # project-bound structure check (I1: the
-    kind: gate            # gate command is data, not judgment)
-    run: "{gate_check_cmd} {feature_dir}"
-
-  - id: build             # review cluster is a ledger task (I5)
-    kind: agent
-    craft: [agents/implementer, agents/test-author, agents/reviewer]
-    in: [tasks.md]
-    out: [code, checked tasks]
-
-  - id: gate-ledger       # every task attested; SUITE on HEAD; clean tree
-    kind: gate
-    run: "{netdust_flow}/bin/ledger.py {feature_dir}"
-
-  - id: shakeout          # attended QA — yield point only (I4)
-    kind: human
-    out: [seal shakeout]
-
-  - id: gate-acceptance   # the finish reads the recorded verdict
-    kind: gate
-    run: "{netdust_flow}/bin/seal.py check {feature_dir} shakeout"
-
 edges:
-  - {from: __start__,       to: spec}
-  - {from: spec,            to: gate-spec}
-  - {from: gate-spec,       to: build,    when: gate.exit == 0}
-  - {from: gate-spec,       to: spec,     when: gate.exit != 0}
-  - {from: build,           to: gate-ledger}
-  - {from: gate-ledger,     to: shakeout, when: gate.exit == 0}
-  - {from: gate-ledger,     to: build,    when: gate.exit != 0}
-  - {from: shakeout,        to: gate-acceptance}
-  - {from: gate-acceptance, to: __end__,  when: gate.exit == 0}
-  - {from: gate-acceptance, to: build,    when: gate.exit == 2}
-  - {from: gate-acceptance, to: shakeout, when: gate.exit == 1}
+  # Declaring any edge from a node replaces ALL of the parent's edges
+  # from that node — one routing decision, one routing table.
+  - {from: __start__,   to: spec}
+  - {from: gate-spec,   to: build,    when: gate.exit == 0}
+  - {from: gate-spec,   to: spec,     when: gate.exit != 0}
+  - {from: gate-ledger, to: shakeout, when: gate.exit == 0}
+  - {from: gate-ledger, to: build,    when: gate.exit != 0}

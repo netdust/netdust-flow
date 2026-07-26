@@ -225,7 +225,28 @@ def test_check_gates_passes_when_the_gate_exists(tmp_path):
 def test_check_gates_fails_on_a_missing_gate_program(tmp_path):
     rc, out = _lint(_gated_project(tmp_path, False))
     assert rc == 1, out
-    assert "gate-x" in out and "does not exist" in out, out
+    assert "gate-x" in out and "is not under" in out, out
+
+
+def test_check_gates_resolves_a_multi_word_bind(tmp_path):
+    # the bug this rule was consolidated to kill: the old check
+    # substituted a bind into `run.split()[0]` and then looked for a
+    # file literally named `python3 .flow/bin/present.py`
+    proj = _gated_project(tmp_path, True)
+    rc, out = _lint(proj, "--bind",
+                    "gate_check_cmd=python3 .flow/bin/present.py")
+    assert rc == 0, out
+    assert "gate-y" not in out, out          # checked for real, not warned
+
+
+def test_check_gates_catches_a_missing_script_behind_an_interpreter(tmp_path):
+    # argv[0] is `python3`, which is always on PATH — the thing that
+    # actually goes missing is the script it is handed
+    proj = _gated_project(tmp_path, True)
+    rc, out = _lint(proj, "--bind",
+                    "gate_check_cmd=python3 .flow/bin/absent.py")
+    assert rc == 1, out
+    assert "absent.py" in out, out
 
 
 def test_check_gates_warns_not_fails_on_a_bound_gate(tmp_path):
@@ -244,3 +265,186 @@ def test_check_gates_is_opt_in(tmp_path):
         [sys.executable, str(ROOT / "bin" / "flow-lint.py"),
          str(proj / "site.yaml")], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout
+
+
+# ── --check-craft: a declaration that resolves to nothing will not be
+# used, and that much IS checkable (run 0001, finding F4)
+
+def _craft_lint(proj, *extra):
+    p = subprocess.run(
+        [sys.executable, str(ROOT / "bin" / "flow-lint.py"),
+         str(proj / "site.yaml"), "--check-craft", "--project", str(proj),
+         *extra], capture_output=True, text=True)
+    return p.returncode, p.stdout
+
+
+def test_check_craft_passes_when_the_project_owns_it(tmp_path):
+    proj = _gated_project(tmp_path, True)
+    (proj / ".flow" / "craft").mkdir()
+    (proj / ".flow" / "craft" / "build.md").write_text("# craft\n")
+    rc, out = _craft_lint(proj, "--plugin-root", str(tmp_path / "absent"))
+    assert rc == 0, out
+
+
+def test_check_craft_fails_on_an_unresolvable_project_craft(tmp_path):
+    proj = _gated_project(tmp_path, True)
+    rc, out = _craft_lint(proj, "--plugin-root", str(tmp_path / "absent"))
+    assert rc == 1, out
+    assert "craft" in out and "build.md" in out, out
+
+
+def test_check_craft_resolves_a_bare_name_in_the_pack(tmp_path):
+    # `agents/reviewer` → .flow/craft/agents/reviewer.md, no suffix in
+    # the flow, project-first like every other resolution
+    proj = tmp_path / "proj"
+    (proj / ".flow" / "craft" / "agents").mkdir(parents=True)
+    (proj / ".flow" / "craft" / "agents" / "reviewer.md").write_text("# r\n")
+    (proj / "site.yaml").write_text(
+        GATED.replace("craft: [.flow/craft/build.md]",
+                      "craft: [agents/reviewer]"))
+    (proj / ".flow" / "bin").mkdir(parents=True, exist_ok=True)
+    (proj / ".flow" / "bin" / "present.py").write_text("import sys\n")
+    rc, out = _craft_lint(proj, "--plugin-root", str(tmp_path / "absent"))
+    assert rc == 0, out
+
+
+def test_check_craft_warns_when_the_plugin_root_is_not_installed(tmp_path):
+    # plugin-shaped craft on a machine without the plugin is an
+    # environment fact, not a flow defect — same distinction the gate
+    # check makes between what this file knows and what arm verifies
+    proj = _gated_project(tmp_path, True)
+    (proj / "site.yaml").write_text(
+        GATED.replace("craft: [.flow/craft/build.md]",
+                      "craft: [agents/planner]"))
+    rc, out = _craft_lint(proj, "--plugin-root", str(tmp_path / "absent"))
+    assert rc == 0, out
+    assert "WARN" in out and "agents/planner" in out, out
+
+
+def test_check_craft_is_opt_in(tmp_path):
+    proj = _gated_project(tmp_path, True)
+    p = subprocess.run(
+        [sys.executable, str(ROOT / "bin" / "flow-lint.py"),
+         str(proj / "site.yaml")], capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout
+
+
+# ── extends: composition resolved at compile time, linted as the road
+# it actually becomes
+
+BASE = """\
+flow: base
+version: 1
+state:
+  gate: {}
+nodes:
+  - id: brainstorm
+    kind: agent
+    craft: [agents/implementer]
+  - id: build
+    kind: agent
+    craft: [agents/implementer]
+  - id: gate-x
+    kind: gate
+    run: "true"
+edges:
+  - {from: __start__, to: brainstorm}
+  - {from: brainstorm, to: build}
+  - {from: build, to: gate-x}
+  - {from: gate-x, to: __end__, when: gate.exit == 0}
+  - {from: gate-x, to: build, when: gate.exit != 0}
+"""
+
+DERIVED = """\
+flow: derived
+version: 1
+extends: base.yaml
+remove: [brainstorm]
+edges:
+  - {from: __start__, to: build}
+"""
+
+
+def _composed(tmp_path, child=DERIVED, base=BASE):
+    (tmp_path / "base.yaml").write_text(base)
+    (tmp_path / "derived.yaml").write_text(child)
+    p = subprocess.run(
+        [sys.executable, str(LINT), str(tmp_path / "derived.yaml"),
+         "--compile", "--project", str(tmp_path)],
+        capture_output=True, text=True, timeout=60)
+    return p.returncode, p.stdout
+
+
+def test_extends_inherits_and_removes(tmp_path):
+    import json
+    rc, out = _composed(tmp_path)
+    assert rc == 0, out
+    twin = json.loads((tmp_path / "derived.json").read_text())
+    ids = [n["id"] for n in twin["nodes"]]
+    assert ids == ["build", "gate-x"]            # brainstorm dropped
+    assert twin["flow"] == "derived"             # the child names the road
+    assert "extends" not in twin and "remove" not in twin
+    # every edge touching the removed node is gone, and the child's
+    # replacement wiring is in
+    assert {"from": "__start__", "to": "build"} in twin["edges"]
+    assert not any("brainstorm" in (e["from"], e["to"]) for e in twin["edges"])
+
+
+def test_extends_child_node_replaces_by_id(tmp_path):
+    child = DERIVED + """\
+nodes:
+  - id: build
+    kind: agent
+    craft: [agents/reviewer]
+"""
+    import json
+    rc, out = _composed(tmp_path, child)
+    assert rc == 0, out
+    twin = json.loads((tmp_path / "derived.json").read_text())
+    build = [n for n in twin["nodes"] if n["id"] == "build"][0]
+    assert build["craft"] == ["agents/reviewer"]
+
+
+def test_extends_edges_override_per_source_node(tmp_path):
+    # declaring any edge from gate-x replaces ALL of the parent's edges
+    # from gate-x: one routing decision, one routing table
+    child = DERIVED.replace(
+        "  - {from: __start__, to: build}",
+        "  - {from: __start__, to: build}\n"
+        "  - {from: gate-x, to: __end__, when: gate.exit == 0}\n"
+        "  - {from: gate-x, to: build, when: gate.exit == 1}")
+    import json
+    rc, out = _composed(tmp_path, child)
+    assert rc == 0, out
+    twin = json.loads((tmp_path / "derived.json").read_text())
+    from_gate = [e for e in twin["edges"] if e["from"] == "gate-x"]
+    assert len(from_gate) == 2
+    assert {e["when"] for e in from_gate} == {"gate.exit == 0", "gate.exit == 1"}
+
+
+def test_a_composition_that_breaks_the_wiring_fails_the_lint(tmp_path):
+    # removing a node without rewiring leaves __start__ dangling; the
+    # derived graph faces the whole lint, so composition cannot smuggle
+    # a broken road past it
+    rc, out = _composed(tmp_path, "flow: derived\nversion: 1\n"
+                                  "extends: base.yaml\nremove: [brainstorm]\n")
+    assert rc == 1, out
+    assert "no edge from __start__" in out, out
+
+
+def test_extends_cycle_is_refused(tmp_path):
+    (tmp_path / "a.yaml").write_text("flow: a\nversion: 1\nextends: b.yaml\n")
+    (tmp_path / "b.yaml").write_text("flow: b\nversion: 1\nextends: a.yaml\n")
+    p = subprocess.run(
+        [sys.executable, str(LINT), str(tmp_path / "a.yaml"),
+         "--project", str(tmp_path)], capture_output=True, text=True)
+    assert p.returncode == 1
+    assert "[extends]" in p.stdout and "cycle" in p.stdout, p.stdout
+
+
+def test_extends_unknown_parent_is_refused(tmp_path):
+    (tmp_path / "a.yaml").write_text("flow: a\nversion: 1\nextends: nope\n")
+    p = subprocess.run(
+        [sys.executable, str(LINT), str(tmp_path / "a.yaml"),
+         "--project", str(tmp_path)], capture_output=True, text=True)
+    assert p.returncode == 1 and "[extends]" in p.stdout, p.stdout

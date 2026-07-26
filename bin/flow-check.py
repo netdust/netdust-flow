@@ -81,6 +81,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import flowspec  # noqa: E402 — stdlib-only by contract; see its docstring
+
+RUNTIME = Path(__file__).resolve().parents[1]
+
 TASK_RE = re.compile(r"^- \[( |x|X)\] (T\d+)\b(.*)$")
 COND_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_.]*)\s*(==|!=|>=|<=|>|<|in)\s+(.+?)\s*$")
 PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -91,15 +96,15 @@ FINISHED, CONTINUE, BLOCKED = 0, 1, 2
 
 # ── flow loading ─────────────────────────────────────────────────────
 
-def load_flow(path: Path) -> dict:
+def load_flow(path: Path, project: Path | None = None) -> dict:
     if path.suffix == ".json":
         doc = json.loads(path.read_text())
-        _block_if_stale(path, doc)
+        _block_if_stale(path, doc, project)
         return doc
     twin = path.with_suffix(".json")
     if twin.exists():
         doc = json.loads(twin.read_text())
-        _block_if_stale(twin, doc)
+        _block_if_stale(twin, doc, project)
         return doc
     try:
         import yaml  # lint-time dependency; hook path prefers the twin
@@ -110,7 +115,7 @@ def load_flow(path: Path) -> dict:
     return yaml.safe_load(path.read_text())
 
 
-def _block_if_stale(twin: Path, doc: dict) -> None:
+def _block_if_stale(twin: Path, doc: dict, project: Path | None = None) -> None:
     """Refuse a twin whose YAML source parses to DIFFERENT data — drift
     is blocked, not documented (an agent should never need to remember
     the recompile rule; the walker enforces it). Data equality, not
@@ -126,7 +131,14 @@ def _block_if_stale(twin: Path, doc: dict) -> None:
     except ImportError:
         return
     try:
-        if yaml.safe_load(source.read_text()) != doc:
+        # Compare against the FLATTENED source: a composed flow's twin
+        # holds the resolved graph, so the raw source never equals it
+        # and every armed run of a derived road would block here.
+        fresh = flowspec.flatten(
+            yaml.safe_load(source.read_text()),
+            lambda p: yaml.safe_load(p.read_text()),
+            source.parent, project, RUNTIME)
+        if fresh != doc:
             raise RuntimeError(
                 f"{twin.name} is STALE — {source.name} parses to a "
                 "different graph; run `flow-lint --compile` first")
@@ -199,17 +211,13 @@ def run_gate(node: dict, binds: dict, plugin_root: Path,
         return None, (f"gate `{node['id']}` has unbound placeholder "
                       f"{leftover.group(0)} — pass --bind"), None
     argv = shlex.split(cmd)
-    prog = Path(argv[0])
-    if not prog.is_absolute():
-        # A relative gate program is resolved PROJECT-FIRST: a flow that
-        # ships with a project (`.flow/bin/…`) names its own gates, and
-        # the project must win over anything installed globally — the
-        # runtime stays project-independent precisely by not owning the
-        # checks. The plugin root remains the fallback for shared craft.
-        for candidate in (cwd / argv[0], plugin_root / argv[0]):
-            if candidate.exists():
-                prog = candidate
-                break
+    # A relative gate program is resolved PROJECT-FIRST: a flow that
+    # ships with a project (`.flow/bin/…`) names its own gates, and the
+    # project must win over anything installed globally — the runtime
+    # stays project-independent precisely by not owning the checks. The
+    # rule lives in flowspec so flow-lint and flow-arm answer the same
+    # question the same way, before the run rather than during it.
+    prog = flowspec.resolve_program(argv[0], cwd, plugin_root) or Path(argv[0])
     if str(prog).endswith(".py"):
         argv = [sys.executable, str(prog)] + argv[1:]
     else:
@@ -272,6 +280,13 @@ def walk(doc: dict, start: str, feature_dir: Path, binds: dict,
         print(f"next: {nxt}")
         # evidence-derived progress from a gate beats checkbox counting
         print(last_progress or progress(feature_dir, pos, len(order)))
+        # The craft the next node declares, handed to the driving agent
+        # instead of left for it to go look up. This does not make craft
+        # evidence — nothing can, which is what I5 exists for — but a
+        # declaration nobody is shown is prose twice over (run 0001, F4).
+        declared = (nodes.get(nxt) or {}).get("craft") or []
+        if declared:
+            print("craft: " + ", ".join(str(c) for c in declared))
         for t in traces:
             print("trace: " + json.dumps(t))
         return code
@@ -362,7 +377,7 @@ def main() -> int:
         binds[k] = v
 
     try:
-        doc = load_flow(args.flow)
+        doc = load_flow(args.flow, args.cwd)
     except Exception as e:
         print(f"FLOW: BLOCKED — cannot load flow: {e}")
         return BLOCKED

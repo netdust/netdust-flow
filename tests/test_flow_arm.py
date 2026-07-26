@@ -83,6 +83,9 @@ def project(tmp_path, flow_text=SELF_CONTAINED, name="site", *,
     proj = tmp_path / "site-repo"
     (proj / ".flow" / "flows").mkdir(parents=True, exist_ok=True)
     (proj / ".flow" / "bin").mkdir(parents=True, exist_ok=True)
+    (proj / ".flow" / "craft").mkdir(parents=True, exist_ok=True)
+    # arm runs --check-craft: a node's declared craft must resolve
+    (proj / ".flow" / "craft" / "build.md").write_text("# build craft\n")
     (proj / ".flow" / "flows" / f"{name}.yaml").write_text(flow_text)
     if gate:
         (proj / ".flow" / "bin" / "project-gate.py").write_text(
@@ -195,8 +198,9 @@ def test_red_lint_refuses(tmp_path):
     proj = project(tmp_path, RED_LINT)
     rc, out = arm(proj)
     assert rc == 1
-    assert "REFUSED  [lint]" in out
-    assert "I2" in out                       # the lint's own verdict is shown
+    # the refusal carries the lint's own check name, so an invariant
+    # violation reads as one rather than as a generic lint failure
+    assert "REFUSED  [I2]" in out
     assert not (proj / MARKER_REL).exists()
 
 
@@ -331,4 +335,110 @@ def test_malformed_bind_refuses(tmp_path, bad):
     rc, out = arm(proj, "--bind", bad)
     assert rc == 1
     assert "REFUSED  [binds]" in out
+    assert not (proj / MARKER_REL).exists()
+
+
+# ── pack.yaml is a real artifact: a schema, validated at arm
+
+def test_this_repos_own_pack_validates():
+    # the convention has a consumer in its own repo so it cannot rot
+    import jsonschema
+    import yaml as _yaml
+    schema = json.loads((ROOT / "pack.schema.json").read_text())
+    pack = _yaml.safe_load((ROOT / ".flow" / "pack.yaml").read_text())
+    jsonschema.Draft202012Validator(schema).validate(pack)
+
+
+def test_invalid_pack_refuses(tmp_path):
+    proj = project(tmp_path, pack="pack: Site\ndescription: bad name\n")
+    rc, out = arm(proj)
+    assert rc == 1
+    assert "REFUSED  [pack]" in out
+    assert not (proj / MARKER_REL).exists()
+
+
+def test_unparseable_pack_refuses(tmp_path):
+    proj = project(tmp_path, pack="pack: [unclosed\n")
+    rc, out = arm(proj)
+    assert rc == 1
+    assert "REFUSED  [pack]" in out
+
+
+def test_pack_supplies_its_own_bind_value(tmp_path):
+    # a self-contained pack: no CLAUDE.md convention needed
+    proj = project(tmp_path, BOUND_GATE, pack=(
+        "pack: site\ndescription: test pack\n"
+        "binds:\n"
+        "  gate_check_cmd:\n"
+        "    description: the structure gate\n"
+        "    value: python3 .flow/bin/project-gate.py\n"))
+    rc, out = arm(proj)
+    assert rc == 0, out
+    assert marker(proj)["binds"]["gate_check_cmd"] == \
+        "python3 .flow/bin/project-gate.py"
+
+
+def test_pack_value_beats_claude_md(tmp_path):
+    proj = project(
+        tmp_path, BOUND_GATE,
+        claude_md="Gate check: python3 .flow/bin/project-gate.py --wide\n",
+        pack=("pack: site\ndescription: test pack\n"
+              "binds:\n  gate_check_cmd:\n    description: the gate\n"
+              "    value: python3 .flow/bin/project-gate.py\n"))
+    rc, out = arm(proj)
+    assert rc == 0, out
+    assert marker(proj)["binds"]["gate_check_cmd"].endswith("project-gate.py")
+
+
+def test_pack_bind_description_is_the_hint_when_unbound(tmp_path):
+    proj = project(tmp_path, BOUND_GATE, pack=(
+        "pack: site\ndescription: test pack\n"
+        "binds:\n  gate_check_cmd:\n"
+        "    description: the structure gate this project runs\n"))
+    rc, out = arm(proj)
+    assert rc == 1
+    assert "the structure gate this project runs" in out
+
+
+# ── composition: a derived flow arms exactly like a flat one
+
+def test_arms_a_flow_that_extends_another(tmp_path):
+    proj = project(tmp_path)
+    (proj / ".flow" / "flows" / "derived.yaml").write_text(
+        "flow: derived\nversion: 1\nextends: site\n"
+        "remove: [build]\n"
+        "nodes:\n"
+        "  - id: work\n    kind: agent\n    craft: [.flow/craft/build.md]\n"
+        "edges:\n"
+        "  - {from: __start__, to: work}\n"
+        "  - {from: work, to: gate-project}\n"
+        "  - {from: gate-project, to: __end__, when: gate.exit == 0}\n"
+        "  - {from: gate-project, to: work, when: gate.exit != 0}\n")
+    rc, out = arm(proj, flow="derived")
+    assert rc == 0, out
+    twin = json.loads(Path(marker(proj)["flow"]).read_text())
+    # the marker points at the FLATTENED graph; the walker never sees
+    # `extends`, so composition costs the runtime nothing
+    assert [n["id"] for n in twin["nodes"]] == ["gate-project", "work"]
+    assert "extends" not in twin
+
+
+def test_a_broken_extends_refuses(tmp_path):
+    proj = project(tmp_path)
+    (proj / ".flow" / "flows" / "derived.yaml").write_text(
+        "flow: derived\nversion: 1\nextends: nowhere-at-all\n")
+    rc, out = arm(proj, flow="derived")
+    assert rc == 1
+    assert "REFUSED  [extends]" in out
+    assert not (proj / MARKER_REL).exists()
+
+
+# ── craft resolution, checked at arm
+
+def test_unresolvable_project_craft_refuses(tmp_path):
+    proj = project(tmp_path)
+    (proj / ".flow" / "craft" / "build.md").unlink()
+    rc, out = arm(proj, "--plugin-root", str(tmp_path / "absent"))
+    assert rc == 1
+    assert "REFUSED  [craft]" in out
     assert not (proj / MARKER_REL).exists()

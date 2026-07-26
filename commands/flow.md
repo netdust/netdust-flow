@@ -29,6 +29,8 @@ and it refuses rather than guesses:
 | `<flow>` resolves to nothing | precondition 1 |
 | the flow FAILs `flow-lint --compile` | precondition 1 |
 | a gate names a program that exists nowhere the walker looks | precondition 1b |
+| a node declares craft that resolves to nothing | new — craft was unchecked |
+| `.flow/pack.yaml` does not match `pack.schema.json` | new — the pack was prose |
 | a `{placeholder}` used by a gate has no value | preconditions 1c, 2, 5 |
 | `.flow/pack.yaml` requires a tool that is not on PATH | precondition 1c |
 | the flow scans floors and there is no `.flow/floors.yaml` | new — the runtime used to supply one |
@@ -36,7 +38,7 @@ and it refuses rather than guesses:
 | `--node` names a node the flow does not declare | new |
 | a marker is already there | new — re-arming discarded the live run's id |
 
-Note the fourth row: the old per-flow rules ("deliver needs a gate
+Note the placeholder row: the old per-flow rules ("deliver needs a gate
 command", "patch needs a suite command") are consequences of one
 generic rule now, so a NEW flow gets the same protection without
 anyone writing it a new paragraph here.
@@ -54,8 +56,9 @@ Bind values, in increasing precedence: `netdust_flow`, `base_ref`
 (default `main`, verified to resolve) and `floors_file` (default
 `.flow/floors.yaml`, verified to exist); the project CLAUDE.md
 (`Gate check:` → `gate_check_cmd`, `Test suite:` → `test_suite_cmd`);
-then `--bind NAME=VALUE`. `feature_dir` is never a marker bind — the
-walker supplies it. Pass `--node <id>` to graft onto an existing run,
+`.flow/pack.yaml`'s `binds.<name>.value` (flow-specific, so it beats
+the repo-wide line); then `--bind NAME=VALUE`. `feature_dir` is never
+a marker bind — the walker supplies it. Pass `--node <id>` to graft onto an existing run,
 `--budget`/`--max-dry` to override what it derives.
 
 It also prepares what the run needs and cannot recover afterwards: the

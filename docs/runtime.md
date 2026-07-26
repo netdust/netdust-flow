@@ -30,9 +30,11 @@ is where that file is proven before it is written: the flow resolves
 (project `.flow/flows/` first, then the built-in roads), lints clean
 and compiles its twin, every gate program exists where the walker
 would look for it (project root · plugin root · PATH), every
-`{placeholder}` a gate uses has a value, `.flow/pack.yaml`'s required
-tools are present, and any `{base_ref}` resolves in the repo. Any one
-of those failing is a refusal naming what is missing — not a marker.
+`{placeholder}` a gate uses has a value, every craft an agent node
+declares resolves, `.flow/pack.yaml` validates against
+`pack.schema.json` and its required tools are present, and any
+`{base_ref}` or `{floors_file}` resolves. Any one of those failing is
+a refusal naming what is missing — not a marker.
 
 The generic placeholder rule replaces what used to be per-flow prose:
 deliver's `{gate_check_cmd}` and patch's `{test_suite_cmd}` are the
@@ -76,10 +78,13 @@ grammar — no `eval`. Gates run as argv — no shell. Placeholders
 (`{feature_dir}`, `{netdust_flow}`, project binds) are substituted
 from the marker; an unbound placeholder blocks.
 
-stdout contract: verdict line, `next:` line, `progress:` line, then
-one `trace:` JSON line per executed gate (the hook folds these into
-the journal; standalone runs like `/flow status` just print them —
-a status check must not write history).
+stdout contract: verdict line, `next:` line, `progress:` line, an
+optional `craft:` line naming what the next node declares, then one
+`trace:` JSON line per executed gate (the hook folds these into the
+journal; standalone runs like `/flow status` just print them — a
+status check must not write history). The hook puts the craft into the
+block reason, so the declaration reaches the agent that has to use it
+instead of waiting in a file for someone to look it up.
 
 ## Flow loading
 
@@ -87,6 +92,20 @@ The walker prefers the compiled `.json` twin, written only by a green
 `flow-lint --compile` — so the hook path needs no PyYAML and a flow
 that fails the lint can never drive a run. The YAML source is
 authoring-side.
+
+`extends:` composition is resolved by the lint before the twin is
+written, so the twin is always the COMPLETE graph and the runtime
+keeps exactly one notion of what a flow is. (The staleness check
+flattens the source the same way before comparing — otherwise every
+armed run of a derived road would block on a twin that is correct.)
+
+## Shared rules (`bin/flowspec.py`)
+
+Where a gate program is, where a node's craft is, and how `extends:`
+composes: three rules the walker, the lint and the arm step all need
+and none may answer differently. Stdlib only, because the walker
+imports it and the hook path takes no authoring dependencies — the
+`hooks-run-without-authoring-deps` CI job is what keeps that true.
 
 ## Evidence writers
 

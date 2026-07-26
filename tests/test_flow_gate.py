@@ -227,3 +227,44 @@ def test_run_id_unique_across_concurrent_runs(tmp_path):
     assert len(ids) == 8, f"run ids collided: {sorted(ids)}"
     assert all(rid.startswith("r20") and len(rid.split("-")) == 3
                for rid in ids), sorted(ids)
+
+
+# ── the hook path's dependency contract, asserted directly
+#
+# The `hooks-run-without-authoring-deps` CI job proves this by running
+# on a bare interpreter, but that job fails LATE and reads like an
+# unrelated breakage. flow-check.py imports flowspec, so flowspec is
+# now part of the hook path; this test says so in one line.
+
+STDLIB_OK = {
+    "__future__", "argparse", "hashlib", "json", "os", "pathlib", "re",
+    "secrets", "shlex", "shutil", "subprocess", "sys", "time", "datetime",
+    "fnmatch", "typing",
+}
+
+
+def _toplevel_imports(path):
+    """MODULE-LEVEL imports only: an import inside a guarded function
+    (flow-check's `import yaml` for the staleness check) is optional by
+    construction and never runs on a bare host."""
+    import ast
+    names = set()
+    for node in ast.parse(Path(path).read_text()).body:
+        if isinstance(node, ast.Import):
+            names |= {a.name.split(".")[0] for a in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names.add(node.module.split(".")[0])
+    return names
+
+
+def test_flowspec_imports_nothing_third_party():
+    extra = _toplevel_imports(ROOT / "bin" / "flowspec.py") - STDLIB_OK
+    assert not extra, f"flowspec is in the hook path; it may not import {extra}"
+
+
+def test_hook_path_scripts_import_nothing_third_party():
+    # PyYAML appears inside flow-check only behind a guarded try, for
+    # the staleness check — never at module level
+    for name in ("bin/flow-check.py", "hooks/loop-gate.py"):
+        extra = _toplevel_imports(ROOT / name) - STDLIB_OK - {"flowspec"}
+        assert not extra, f"{name} is in the hook path; it may not import {extra}"

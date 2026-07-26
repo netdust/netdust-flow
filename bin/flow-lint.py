@@ -48,6 +48,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import flowspec  # noqa: E402
+
 try:
     import yaml
 except ImportError:  # pragma: no cover
@@ -83,16 +86,32 @@ class Findings:
         return any(s == "FAIL" for s, _, _ in self.items)
 
 
-def lint_file(path: Path, f: Findings) -> None:
+def load_flat(path: Path, project: Path, f: Findings) -> dict | None:
+    """Parse, then resolve `extends:` — every check below, and the twin
+    that gets written, sees the COMPLETE graph. A derived flow is
+    linted as the road it actually is, not as the diff that produced
+    it, so composition can never smuggle a node past I2."""
     try:
         doc = yaml.safe_load(path.read_text())
     except Exception as e:
         f.fail("parse", f"{path.name}: {e}")
-        return
+        return None
     if not isinstance(doc, dict):
         f.fail("root", f"{path.name}: top level must be a mapping")
-        return
+        return None
+    try:
+        return flowspec.flatten(
+            doc, lambda p: yaml.safe_load(p.read_text()),
+            path.parent, project, SCHEMA_PATH.parent)
+    except flowspec.ExtendsError as e:
+        f.fail("extends", f"{path.name}: {e}")
+        return None
+    except Exception as e:
+        f.fail("extends", f"{path.name}: cannot resolve `extends` ({e})")
+        return None
 
+
+def lint_file(path: Path, doc: dict, f: Findings) -> None:
     try:
         schema = json.loads(SCHEMA_PATH.read_text())
         validator = jsonschema.Draft202012Validator(schema)
@@ -222,42 +241,79 @@ def lint_file(path: Path, f: Findings) -> None:
 PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 
 
-def check_gates(path: Path, project: Path, binds: dict, f: Findings) -> None:
-    """Every gate program a flow names must exist NOW, in the project
-    that owns the flow. A missing gate is otherwise discovered mid-run
-    as a BLOCKED walk, which reads like a flow defect and costs a whole
-    arming to diagnose. Only fully-bound program paths can be checked —
-    a gate whose program comes from a {bind} is the arm step's problem
-    (it verifies binds resolve), so it is reported as a WARN, not a
-    false FAIL — unless the caller supplied that bind with --bind, in
-    which case it resolves and is checked like any other. A project
-    that knows where its own gates live should say so and get a real
-    check instead of a warning."""
-    try:
-        doc = yaml.safe_load(path.read_text())
-    except Exception:
-        return  # the parse FAIL is already recorded by lint_file
-    if not isinstance(doc, dict):
-        return
+def check_gates(path: Path, doc: dict, project: Path, plugin_root: Path,
+                binds: dict, f: Findings) -> None:
+    """Every gate program a flow names must exist NOW, where the walker
+    would look for it. A missing gate is otherwise discovered mid-run as
+    a BLOCKED walk, which reads like a flow defect and costs a whole
+    arming to diagnose.
+
+    Resolution is flowspec's, i.e. the walker's: substitute binds into
+    the WHOLE command, split it, resolve argv[0] project-root first and
+    check any script it is handed. Doing this by hand here is what made
+    the old version reject `--bind gate_check_cmd="python3 x.py"` — it
+    substituted a two-word command into `run.split()[0]` and went
+    looking for a file with a space in its name.
+
+    A gate whose program still carries a `{placeholder}` cannot be
+    checked; that is the arm step's job (it verifies binds resolve), so
+    it is a WARN. A project that knows where its own gates live should
+    pass --bind and get a real check instead of a warning."""
     for node in doc.get("nodes", []) or []:
         if not isinstance(node, dict) or node.get("kind") != "gate":
             continue
         run = str(node.get("run", "")).strip()
         if not run:
             continue
-        prog = run.split()[0]
-        for key, val in binds.items():
-            prog = prog.replace("{" + key + "}", val)
-        if PLACEHOLDER_RE.search(prog):
-            f.warn("gates", f"{path.name}: gate `{node.get('id')}` program "
-                            f"comes from a bind ({prog}) — verified at arm")
+        cmd = flowspec.substitute(run, binds)
+        programs = flowspec.gate_programs(cmd)
+        if not programs:
+            f.fail("gates", f"{path.name}: gate `{node.get('id')}` command "
+                            f"`{cmd}` does not parse as argv")
             continue
-        candidate = Path(prog)
-        if not candidate.is_absolute():
-            candidate = project / prog
-        if not candidate.exists():
-            f.fail("gates", f"{path.name}: gate `{node.get('id')}` names "
-                            f"`{prog}`, which does not exist under {project}")
+        for token in programs:
+            # only the PROGRAM tokens matter here: an argument that is
+            # still a placeholder (`{feature_dir}`, supplied by the
+            # walker) must not stop the program itself being checked
+            if PLACEHOLDER_RE.search(token):
+                f.warn("gates", f"{path.name}: gate `{node.get('id')}` "
+                                f"program comes from a bind ({token}) — "
+                                "verified at arm")
+                continue
+            if flowspec.resolve_program(token, project, plugin_root) is None:
+                f.fail("gates", f"{path.name}: gate `{node.get('id')}` needs "
+                                f"`{token}`, which is not under {project}, "
+                                "the plugin root, or PATH")
+
+
+def check_craft(path: Path, doc: dict, project: Path, plugin_root: Path,
+                f: Findings) -> None:
+    """Every craft an agent node declares must resolve — project
+    `.flow/craft/` first, then the plugin root.
+
+    Craft is not a gate: nothing mechanical notices when it is skipped
+    (that is exactly why I5 forces the craft that matters to become a
+    ledger task). But craft that cannot be RESOLVED is craft that
+    certainly will not be used, and that much is checkable, so it is
+    checked. Run 0001's finding F4 is the cost of not checking it: the
+    build node's declared reviewers were never dispatched, and the
+    eight escaped defects were the measured price.
+
+    An uninstalled plugin root is a WARN, not a FAIL — the same
+    distinction the gate check makes between what this file can know
+    and what someone else verifies."""
+    plugin_present = plugin_root is not None and plugin_root.exists()
+    for nid, entry in flowspec.craft_of(doc):
+        if flowspec.resolve_craft(entry, project, plugin_root) is not None:
+            continue
+        if not plugin_present and "/" in entry and not entry.startswith("."):
+            f.warn("craft", f"{path.name}: `{nid}` declares `{entry}`, which "
+                            f"is not under {project}/.flow/craft/ and the "
+                            f"plugin root ({plugin_root}) is not installed")
+            continue
+        f.fail("craft", f"{path.name}: `{nid}` declares `{entry}`, which "
+                        f"resolves to nothing (looked under "
+                        f"{project}/.flow/craft/, {project}, {plugin_root})")
 
 
 def main() -> int:
@@ -268,8 +324,14 @@ def main() -> int:
                     help="write a .json twin for every file that lints clean")
     ap.add_argument("--check-gates", action="store_true",
                     help="every gate program named by the flow must exist")
+    ap.add_argument("--check-craft", action="store_true",
+                    help="every craft an agent node declares must resolve")
     ap.add_argument("--project", type=Path, default=Path.cwd(),
                     help="project root relative gate programs resolve against")
+    ap.add_argument("--plugin-root", type=Path,
+                    default=Path.home() / ".claude" / "plugins"
+                    / "netdust-agent",
+                    help="fallback root for shared gates and craft")
     ap.add_argument("--bind", action="append", default=[], metavar="NAME=VALUE",
                     help="resolve a {placeholder} so --check-gates can check "
                          "it for real instead of warning")
@@ -289,14 +351,21 @@ def main() -> int:
             f.fail("io", f"{path}: not found")
             continue
         local = Findings()
-        lint_file(path, local)
-        if args.check_gates:
-            check_gates(path, args.project, binds, local)
+        project = args.project.resolve()
+        plugin_root = args.plugin_root.expanduser()
+        doc = load_flat(path, project, local)
+        if doc is not None:
+            lint_file(path, doc, local)
+            if args.check_gates:
+                check_gates(path, doc, project, plugin_root, binds, local)
+            if args.check_craft:
+                check_craft(path, doc, project, plugin_root, local)
         f.items.extend(local.items)
-        if args.compile and not local.failed and path.suffix != ".json":
+        if (args.compile and doc is not None and not local.failed
+                and path.suffix != ".json"):
+            # the FLATTENED graph: the walker never sees `extends`
             twin = path.with_suffix(".json")
-            twin.write_text(json.dumps(yaml.safe_load(path.read_text()),
-                                       indent=2) + "\n")
+            twin.write_text(json.dumps(doc, indent=2) + "\n")
             print(f"ok    [compile]  {path.name} -> {twin.name}")
 
     if args.json:

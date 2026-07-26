@@ -332,7 +332,23 @@ def test_trace_lines_follow_the_contract_lines(env):
     assert lines[0].startswith("FLOW: ")
     assert lines[1].startswith("next: ")
     assert lines[2].startswith("progress: ")
-    assert all(l.startswith("trace: ") for l in lines[3:])
+    # `craft:` is optional (only when the next node declares any) and
+    # sits between the contract lines and the traces
+    rest = lines[3:]
+    if rest and rest[0].startswith("craft: "):
+        rest = rest[1:]
+    assert all(l.startswith("trace: ") for l in rest)
+
+
+def test_craft_line_names_what_the_next_node_declares(env):
+    # the walker hands the craft over instead of leaving the agent to
+    # open the marker, find the twin and read the node (run 0001, F4)
+    plugin, feature, flowstub = env
+    set_gate(feature, "gate-check", 1)
+    rc, out = run(DELIVER, "spec", feature, plugin, flowstub=flowstub)
+    assert rc == 1
+    craft = [l for l in out.splitlines() if l.startswith("craft: ")]
+    assert craft == ["craft: skills/spec-authoring"], out
 
 
 def test_trace_records_red_gate_exit(env):

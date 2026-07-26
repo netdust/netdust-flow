@@ -79,10 +79,11 @@ about a codebase is not something a runtime can know.
   decision nobody recorded is not a state signal either.
 - **I5** (v0.3, from run 0001) — craft that matters is evidence: a
   review that is not a ledger task did not happen. A node's `craft`
-  list is prose to the driving agent — nothing mechanical notices
-  when it is skipped, which makes "I used the declared craft" exactly
-  the kind of assertion I3 forbids trusting. Gates judge outputs, so
-  craft whose absence shows up in a check is already covered;
+  list is checked to RESOLVE (`--check-craft`, v0.6) and handed to the
+  driving agent on the walker's `craft:` line — but nothing mechanical
+  notices when it is skipped anyway, which keeps "I used the declared
+  craft" exactly the kind of assertion I3 forbids trusting. Gates
+  judge outputs, so craft whose absence shows up in a check is covered;
   independent review is not — its absence is invisible to every gate.
   Therefore deliver plans must carry a review cluster: task(s) whose
   check IS an attested independent review run, refused by the plan
@@ -113,10 +114,19 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
 
 - `flows/` — YAML sources plus committed `.json` twins, written only
   by a green `flow-lint --compile`, so the hook path needs no PyYAML.
-- `flow.schema.json` — Draft 2020-12 schema for flow files, enforced
-  by the lint (typo'd keys fail via `additionalProperties: false`).
+- `flow.schema.json` / `pack.schema.json` — Draft 2020-12 schemas for
+  flow files and project packs, enforced by the lint and the arm step
+  (typo'd keys fail via `additionalProperties: false`).
+- `bin/flowspec.py` — the three rules the tools must agree on:
+  where a gate program is, where a node's craft is, and how `extends:`
+  composes. Stdlib only, because the walker imports it and the hook
+  path takes no authoring dependencies. A rule implemented twice is a
+  rule that drifts.
 - `bin/flow-lint.py` — static gate: schema, graph, determinism,
-  I1/I2/I4, gate results actually consumed by their out-edges.
+  I1/I2/I4, gate results actually consumed by their out-edges. Opt-in
+  `--check-gates` / `--check-craft` prove that every program and every
+  craft a flow names actually resolves; `extends:` is flattened here,
+  so the twin is always a complete graph.
 - `bin/flow-arm.py` — arming as verification: resolves the flow
   project-first, lints and compiles it, proves every gate program
   exists and every `{placeholder}` has a value, then writes the
@@ -126,12 +136,14 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
   a run that would BLOCK twenty minutes in.
 - `bin/flow-check.py` — the walker: stateless, closed condition
   grammar, gates run as argv (no shell, no eval), every config problem
-  BLOCKS instead of guessing.
+  BLOCKS instead of guessing. Its stdout names the next node's craft,
+  so the declaration reaches the agent that has to use it.
 - `hooks/loop-gate.py` — the Stop hook: drives flow markers only; a
   marker without `flow` + `node` is not ours and is ignored untouched.
   Each stop it appends run-journal events (every gate exit — red ones
   included, which exist nowhere else — plus one stop decision) to
-  `<feature-dir>/.flow-journal.jsonl`, fail-open.
+  `<feature-dir>/.flow-journal.jsonl`, fail-open. The block reason
+  carries the next node's craft by name.
 - `bin/attest.py` / `bin/ledger.py` — evidence recorded by the
   verifier into git notes; delivery state derived on request.
 - `bin/seal.py` — human decisions as evidence (I4): `record` writes a
@@ -153,10 +165,13 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
   floors file means every project inherits the author's domain.
 - `commands/flow.md` — `/flow` arm · off · status · seal · eval.
 - `examples/` — four small lint-clean flows with expected paths and
-  the evidence each generates.
-- `.flow/` — this repo's own project pack (its spec/plan gate). The
-  convention has a consumer here so it cannot rot untested.
-- `tests/` — 148 tests (walker + hook integration + evidence + lint +
+  the evidence each generates; the WordPress one is DERIVED from
+  `deliver` with `extends:` rather than copied from it.
+- `.flow/` — this repo's own project pack: `pack.yaml`, its spec/plan
+  gate, and floors about evidence stores and the hook path rather than
+  about anyone's domain. The convention has a consumer here so it
+  cannot rot untested.
+- `tests/` — 171 tests (walker + hook integration + evidence + lint +
   arm + eval + project packs), run by CI on Python 3.10–3.12. One CI job
   installs no authoring dependencies at all, which is how the promise
   that the hook path needs no PyYAML stays true.

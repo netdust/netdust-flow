@@ -3,12 +3,27 @@
   "$id": "https://netdust.be/flow.schema.json",
   "title": "netdust-flow definition",
   "type": "object",
-  "required": ["flow", "version", "nodes", "edges"],
+  "required": ["flow", "version"],
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if":   { "not": { "required": ["extends"] } },
+      "then": { "required": ["nodes", "edges"] }
+    }
+  ],
   "properties": {
     "flow":    { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
     "version": { "type": "integer", "minimum": 0 },
     "state":   { "type": "object" },
+    "extends": {
+      "type": "string",
+      "description": "Flow NAME (project pack first, then the runtime's roads) or path to derive from. Resolved by flow-lint at COMPILE time; the twin holds the complete graph and the walker never sees this key."
+    },
+    "remove": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Node ids to drop from the inherited graph, with every edge that touches them. Only meaningful with `extends`."
+    },
     "nodes": {
       "type": "array",
       "minItems": 1,

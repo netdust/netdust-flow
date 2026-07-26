@@ -36,14 +36,21 @@ instead.
   it easier for an agent's assertion to become state is a defect, no
   matter how convenient. Read `docs/evidence.md` before touching
   attest / ledger / seal.
-- **The hook path takes no authoring dependencies.** `flow-check.py`
-  and `loop-gate.py` run on a bare interpreter and read compiled
-  `.json` twins; PyYAML and jsonschema are lint-time only. CI enforces
-  this in the `hooks-run-without-authoring-deps` job — if you add an
-  import there, that job is where you will hear about it.
+- **The hook path takes no authoring dependencies.** `flow-check.py`,
+  `loop-gate.py` and `flowspec.py` run on a bare interpreter and read
+  compiled `.json` twins; PyYAML and jsonschema are lint-time only. CI
+  enforces this in the `hooks-run-without-authoring-deps` job — if you
+  add an import there, that job is where you will hear about it, and
+  `test_flowspec_imports_nothing_third_party` fails first.
+- **One rule, one implementation.** Gate-program resolution, craft
+  resolution and `extends:` composition live in `bin/flowspec.py`
+  because the walker, the lint and the arm step all need them and must
+  never answer differently. The `--check-gates` bind bug came from
+  exactly that duplication; do not reintroduce it.
 - **Twins are compiled, never hand-edited.** After changing any
   `flows/*.yaml`, run `make compile` and commit both files. CI fails on
-  a stale twin.
+  a stale twin. Twins are FLATTENED: a flow with `extends:` compiles to
+  the complete graph, so changing a parent changes every derived twin.
 - **A new invariant needs a lint rule or a test**, or it is prose. I1,
   I2 and I4's shape are lint-enforced; I3 and I5 are enforced by the
   evidence design and the plan gate. An invariant nothing checks is
