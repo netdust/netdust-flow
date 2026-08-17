@@ -284,6 +284,21 @@ def test_review_without_reviewer_identity_is_not_evidence(repo):
     assert rc == 1 and "reviewer" in out.lower()
 
 
+def test_review_signed_by_the_excluded_builder_is_refused(repo):
+    (repo / "specs" / "demo" / "reviews").mkdir(parents=True)
+    (repo / "specs" / "demo" / "reviews" / "security.md").write_text(
+        f"VERDICT: CLEAN\ntree: {head_tree(repo)}\nreviewer: implementer\n")
+    p = sh(sys.executable, str(REVIEW), "specs/demo", "security",
+           "--not", "implementer", cwd=repo)
+    assert p.returncode == 1 and "excluded" in p.stdout
+    # a distinct identity passes the same check
+    (repo / "specs" / "demo" / "reviews" / "security.md").write_text(
+        f"VERDICT: CLEAN\ntree: {head_tree(repo)}\nreviewer: security-sentinel\n")
+    p = sh(sys.executable, str(REVIEW), "specs/demo", "security",
+           "--not", "implementer", cwd=repo)
+    assert p.returncode == 0, p.stdout
+
+
 def test_review_claiming_a_fantasy_tree_is_rejected(repo):
     (repo / "specs" / "demo" / "reviews").mkdir(parents=True)
     (repo / "specs" / "demo" / "reviews" / "security.md").write_text(
