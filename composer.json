@@ -1,0 +1,25 @@
+{
+    "name": "netdust/flow",
+    "description": "Evidence-driven delivery runtime for AI-assisted development: a YAML flow, one Stop hook, and exit codes. Agents route; gates and humans finish. Python 3 (stdlib-only run path), distributed via composer so a site pins its runtime like any other dependency.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["workflow", "agent", "delivery", "evidence", "claude-code"],
+    "authors": [
+        {
+            "name": "Stefan Vandermeulen",
+            "email": "stefan@netdust.be",
+            "homepage": "https://netdust.be"
+        }
+    ],
+    "bin": [
+        "bin/flow-arm.py",
+        "bin/flow-check.py",
+        "bin/flow-lint.py",
+        "bin/attest.py",
+        "bin/ledger.py",
+        "bin/seal.py",
+        "bin/floor-check.py",
+        "bin/review-check.py",
+        "bin/flow-eval.py"
+    ]
+}

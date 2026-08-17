@@ -1,6 +1,6 @@
 # Run ledger — flow-driven deliveries
 
-theory.md ends on "the final word belongs to the delivery ledger, not
+essays/theory.md ends on "the final word belongs to the delivery ledger, not
 the literature." This is that ledger: one entry per flow-driven run —
 what happened, what the eval measured, what escaped, and what the
 system changed because of it. Entries are append-only; a finding is
@@ -35,7 +35,7 @@ post-seal independent review (two adversarial reviewers, verified
 against WordPress core source) found **8 escaped defects, 3
 high-severity** — all three highs in the seam the shim-based suite
 could not see (WP slashing semantics, `sanitize_email` strictness,
-PHP-version floor). Escaped-defect count is the metric theory.md says
+PHP-version floor). Escaped-defect count is the metric essays/theory.md says
 settles the bull/bear bet; run 0001's number is 8.
 
 **Findings:**

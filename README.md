@@ -52,7 +52,6 @@ The only formula in the system:
 | --- | --- |
 | `flows/deliver.yaml` | brainstorm → spec ⊨gate → plan ⊨gate → **human approval ⊨seal** → build ⟲ ledger → **human shake-out ⊨seal** |
 | `flows/patch.yaml` | build ⟲ suite-green → floors clean → done (floor hit → **human re-dispatch ⊨seal**) |
-| `flows/improve-skill.yaml` | propose → coverage ⊨gate → eval ⊨gate → review ⊨gate → **human adopt ⊨seal** → prune |
 
 Dispatch floors route work up: whatever a project declares dangerous
 takes `deliver` — no agent override downward. The floors themselves
@@ -103,14 +102,26 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
 | [`docs/protocol.md`](docs/protocol.md) | The rules, independent of implementation — the stable contract. |
 | [`docs/runtime.md`](docs/runtime.md) | The implementation: hook, walker, gates, journal. |
 | [`docs/evidence.md`](docs/evidence.md) | Assertion vs evidence vs state; the evidence stores; the trust boundary. |
-| [`docs/evaluation.md`](docs/evaluation.md) | Measurement as a first-class feature: journal → eval → improvement. |
-| [`docs/comparison.md`](docs/comparison.md) | How this differs from agent frameworks, workflow engines, and CI. |
-| [`docs/article.md`](docs/article.md) | The essay: why generation and authority must be separated. |
-| [`docs/theory.md`](docs/theory.md) | The research verdict: sources, debate, confidence, limitations. |
 | [`docs/runs.md`](docs/runs.md) | The run ledger — every flow-driven delivery, measured. |
 | [`docs/project-pack.md`](docs/project-pack.md) | How a project owns its own flow and gates — the runtime supplies the machine, never the checks. |
-| [`docs/craft-loop.md`](docs/craft-loop.md) | Improving the craft itself: memory, skill-eval, and the `improve-skill` road. |
 | [`docs/examples.md`](docs/examples.md) | Index of the example flows under `examples/`. |
+| [`docs/essays/`](docs/essays/) | The thinking, kept but out of the working set: the essay, the theory verdict, the category comparison, the measurement rationale, and the retired craft loop. |
+
+## Install
+
+Two ways to get the runtime, both pinned, both deliberate:
+
+- **Composer, per project** (how `wp-starter` sites consume it):
+  `composer require netdust/flow` via a VCS repository entry — the
+  kernel lands in `vendor/netdust/flow`, the executables in
+  `vendor/bin`, and `composer.lock` pins the exact revision. A runtime
+  update is a lockfile diff, never a silent change to what "finished"
+  means. The project commits its own hooks and `.flow/`; arming
+  refuses if the runtime is not resolvable, so a clone that skipped
+  `composer install` degrades to an ordinary unharnessed session —
+  never to a fake-harnessed one.
+- **Clone, per machine**: `git clone` to `~/.claude/netdust-flow` for
+  driving flows outside composer-managed projects.
 
 ## Parts
 
@@ -152,9 +163,6 @@ I3 by the attest/ledger design; I5 by the plan gate + ledger.
   attest.py: a report exists, its verdict is CLEAN, and it is bound to
   the exact tree it reviewed. Run 0002's caught defect came through
   here — a review of yesterday's code proves nothing about today's.
-- `bin/craft-memory.py` / `bin/skill-eval.py` + `flows/improve-skill.yaml`
-  — the craft loop: craft that earns its place by measurement rather
-  than by being declared. See `docs/craft-loop.md`.
 - `bin/seal.py` — human decisions as evidence (I4): `record` writes a
   decision into git notes, `check` reads the latest back as an exit
   code for the seal gate after each human node. `check --fresh` also

@@ -97,5 +97,5 @@ attest, a rejection seal), the derived state changes with it.
 Self-modifying workflows, agent-created graphs, autonomous policy
 changes, and hidden completion heuristics — each would hand authority
 back to the actor the design exists to check. The human measurement
-loop ([evaluation.md](evaluation.md)) is not a limitation; it is part
+loop ([essays/evaluation.md](essays/evaluation.md)) is not a limitation; it is part
 of the architecture.
