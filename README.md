@@ -29,8 +29,10 @@ Only verified evidence can advance or finish delivery.
                       __end__
 ```
 
-Agents do the work. Gates verify the work. Humans make explicit,
-recorded decisions. Completion is a state transition, not a statement.
+Agents produce work. Verifiers produce evidence. The flow derives
+state. Only verified evidence can finish delivery. Humans make
+explicit, recorded decisions; completion is a state transition, not a
+statement.
 The implementation is small; the claim is not: **workflow authority
 belongs to verifiable evidence, not to the system that produced the
 artifact.**
@@ -90,9 +92,19 @@ about a codebase is not something a runtime can know.
   gate when missing. Enforced by the project's gate command and the
   ledger, not the lint (a flow file cannot see plan content).
 
-All five are the same rule at different altitudes: **no assertion is a
+- **I6** (v1, from external review) — **fail-open for interaction,
+  fail-closed for state.** A broken harness must never trap a session,
+  and a crash must never produce evidence or advance the flow: a hook
+  crash allows the stop but leaves the marker's node unchanged; a gate
+  that crashes exits red; a gate that cannot run BLOCKS rather than
+  emitting an exit code an edge could consume (a deleted seal program
+  must not read as a human rejection). The two safeties are different
+  properties and are tested separately.
+
+All six are the same rule at different altitudes: **no assertion is a
 signal.** I1, I2, and I4's shape are enforced by `bin/flow-lint.py`;
-I3 by the attest/ledger design; I5 by the plan gate + ledger.
+I3 by the attest/ledger design; I5 by the plan gate + ledger; I6 —
+with the trust boundary end to end — by `tests/test_trust_boundary.py`.
 
 ## Documentation
 

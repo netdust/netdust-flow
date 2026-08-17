@@ -79,6 +79,48 @@ guesses. Two dynamic guards bound every run: an iteration budget and a
 dry-loop counter (progress unchanged across stops), both of which
 disarm — **runtime**.
 
+## Termination authority
+
+I2, elevated to its real altitude: **agents have zero termination
+authority.** Only two things may transition a flow into `__end__`:
+
+- a **verified gate** — a command that ran and exited 0, on the
+  evidence it was pointed at;
+- a **recorded human decision** — a seal, read back by a gate
+  (which reduces to the first case: the finish still enters through
+  a gate; the human's authority is the record the gate reads).
+
+Everything an agent produces — artifacts, checked boxes, transcripts,
+routing proposals — is input to that authority, never the authority
+itself. The one-line protocol: *agents produce work; verifiers produce
+evidence; the flow derives state; only verified evidence can finish
+delivery.* Enforced by the lint (I2 — no agent out-edge to `__end__`)
+and exercised end-to-end in `tests/test_trust_boundary.py`.
+
+## Failure semantics (I6)
+
+Two different safeties, explicitly separated:
+
+    FAIL-OPEN FOR INTERACTION — a broken harness must never trap a
+    session. Any internal hook error allows the stop.
+
+    FAIL-CLOSED FOR STATE — a crash can never produce evidence or
+    advance the flow.
+
+Concretely, every failure mode lands on the safe side of the line:
+
+| Failure | Interaction | State |
+| --- | --- | --- |
+| hook crashes (bad marker, internal bug) | session continues | marker untouched, no evidence written |
+| walker crashes or is missing | session continues | marker's node unchanged |
+| gate program crashes at runtime | — | non-zero exit → the red edge |
+| gate program missing / can't launch / times out | — | BLOCKED — never an exit code an edge could consume (a deleted seal program must not read as a human rejection) |
+| journal write fails | session continues | journal is observability, never authority |
+
+A hook failure may cost a loop iteration; it can never mint a green.
+Enforced by `tests/test_trust_boundary.py` (crash cases) plus the
+walker's BLOCK-on-config rule above.
+
 ## Evidence requirements
 
 - A gate's evidence is its exit code, produced by executing its

@@ -92,6 +92,52 @@ State lives in exactly two places, both derived, neither authored:
 Nothing is bookkept. If the evidence changes (a new commit, a revoked
 attest, a rejection seal), the derived state changes with it.
 
+## The layered system
+
+The runtime is one layer of a three-layer separation, and the
+separation is the design: *who works* ≠ *how work is routed* ≠ *what
+correctness means*.
+
+                         ┌───────────────┐
+                         │     HUMAN     │
+                         │ intent        │
+                         │ approval      │
+                         │ acceptance    │
+                         └───────┬───────┘
+                                 │ seal
+                                 ▼
+    ┌─────────────────────────────────────────────────┐
+    │              NETDUST FLOW (this repo)           │
+    │   YAML → state machine → gates → evidence       │
+    │              OWNS TERMINATION                   │
+    └───────────────────────┬─────────────────────────┘
+                            │ dispatches work, names craft
+                            ▼
+    ┌─────────────────────────────────────────────────┐
+    │         AGENT LAYER (e.g. netdust-agent)        │
+    │   planner → test-author → implementer →         │
+    │   reviewers → shakeout                          │
+    │              CREATES ARTIFACTS                  │
+    └───────────────────────┬─────────────────────────┘
+                            │
+                            ▼
+    ┌─────────────────────────────────────────────────┐
+    │       PROJECT PACK (e.g. wp-starter flow/)      │
+    │   domain policy + verification: security,       │
+    │   suite, render, a11y, floors                   │
+    │              DEFINES CORRECTNESS                │
+    └───────────────────────┬─────────────────────────┘
+                            │
+                     verified evidence
+                            │
+                            └──────────► FLOW STATE
+
+The arrow from evidence back to state is the load-bearing one: the
+layer that performs the work never defines whether the work is
+complete. The agent layer is policy-free (it works any road), the
+flow is domain-free (it verifies any pack's checks), and the pack is
+the only layer that knows what "green" means here.
+
 ## What is deliberately absent
 
 Self-modifying workflows, agent-created graphs, autonomous policy

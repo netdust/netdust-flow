@@ -65,6 +65,28 @@ Seals are latest-wins — an approval can go stale if the sealed
 artifact changes without a re-seal (records carry the tree hash for
 audit; stricter freshness is deferred until a drill shows a leak).
 
+## Tree identity
+
+Evidence that matters answers five questions: **what tree** was
+verified, **who/what** verified it, **what** was verified, **when**,
+and **with what result**. Where each store stands:
+
+| Evidence | WHAT tree | WHO verified | WHAT was verified | WHEN | RESULT |
+| --- | --- | --- | --- | --- | --- |
+| attest record | `tree` field (`HEAD^{tree}` at pass time) | `attest.py` running the named `cmd` | the `unit` | `ts` | recorded only on exit 0 |
+| seal record | `tree` field; `--fresh` re-checks it against disk | the human, via `seal.py record` | the `node`'s decision | `ts` | `approved` / `rejected` |
+| review evidence | `tree:` line in the report, checked against the CURRENT `HEAD^{tree}` by `review-check.py` | a fresh-context reviewer (report) + `attest.py` (the record) | the named review scope | attest `ts` | `VERDICT: CLEAN` only |
+| journal event | not tree-bound | the Stop hook, relaying walker traces | gate exits, stop decisions | per-event `ts` | observability — **never authority** |
+| marker | not tree-bound | the hook | machine position only | — | never evidence |
+
+The rule the table encodes: everything that can advance or finish
+delivery is tree-bound; the two rows that are not tree-bound have no
+authority to advance anything. A review of yesterday's tree proves
+nothing about today's (`review-check` refuses it); a seal from before
+an edit goes stale (`--fresh` re-asks); an attest on a superseded HEAD
+still counts for its unit but the SUITE attest must sit on the
+finishing HEAD.
+
 ## The trust boundary
 
 All four stores are tamper-resistant, not tamper-proof. An agent with
