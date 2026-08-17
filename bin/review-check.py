@@ -6,7 +6,14 @@ only if a report exists AND its verdict is CLEAN AND it is bound to
 the exact git tree it reviewed — a review of yesterday's dossier
 proves nothing about today's.
 
-    review-check.py <record-folder> <review-name>
+    review-check.py <record-folder> <review-name> [--not <identity> ...]
+
+`--not` names identities that may NOT sign this review — pass the
+building node's actor so "the reviewer is not the builder" is a
+machine check on the record, not a hope. Still a claim (a builder
+could sign a false name), but a false distinct identity is a forged
+record — deliberate, auditable — where a same-identity review was
+previously just sloppy.
 
 Requires <record-folder>/reviews/<review-name>.md containing:
 
@@ -33,10 +40,20 @@ from pathlib import Path
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("FAIL  [review-check]  usage: review-check.py <record-folder> <name>")
+    argv = sys.argv[1:]
+    excluded: list[str] = []
+    while "--not" in argv:
+        i = argv.index("--not")
+        if i + 1 >= len(argv):
+            print("FAIL  [review-check]  --not requires an identity")
+            return 1
+        excluded.append(argv[i + 1].strip().lower())
+        del argv[i:i + 2]
+    if len(argv) != 2:
+        print("FAIL  [review-check]  usage: review-check.py "
+              "<record-folder> <name> [--not <identity> ...]")
         return 1
-    folder, name = Path(sys.argv[1]), sys.argv[2]
+    folder, name = Path(argv[0]), argv[1]
     report = folder / "reviews" / f"{name}.md"
     if not report.exists():
         print(f"FAIL  [review-check]  no report at {report}")
@@ -63,6 +80,13 @@ def main() -> int:
               "record must answer WHO reviewed, not just that a review "
               "exists (a recorded claim, auditable; independence is the "
               "dispatch contract's job)")
+        return 1
+    if reviewer.strip().lower() in excluded:
+        print(f"FAIL  [review-check]  {name}: reviewer `{reviewer}` is the "
+              "excluded identity — the builder may not sign the review of "
+              "its own work. Dispatch a fresh-context reviewer. (Signing a "
+              "different name without dispatching one is a forged record, "
+              "deliberate and on the record.)")
         return 1
     print(f"ok    [review-check]  {name} CLEAN on tree {tree[:12]} "
           f"by {reviewer}")
