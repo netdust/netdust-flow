@@ -116,6 +116,7 @@ state:
 nodes:
   - id: work
     kind: agent
+    actor: sitebuilder
     out: [artifact]
   - id: gate-x
     kind: gate
@@ -148,6 +149,7 @@ def test_gate_that_raises_is_red_and_routes_back(tmp_path):
     rc, out = walk(tmp_path, feature, f"{crasher}")
     assert rc == 1, out                       # CONTINUE — the red edge
     assert "next: work" in out, out           # routed BACK, not forward
+    assert "actor: sitebuilder" in out, out   # WHO the node assigns, journaled
     assert "FINISHED" not in out
 
 
@@ -258,7 +260,7 @@ def test_review_with_findings_is_not_evidence(repo):
 def test_review_clean_on_current_tree_holds(repo):
     (repo / "specs" / "demo" / "reviews").mkdir(parents=True)
     (repo / "specs" / "demo" / "reviews" / "security.md").write_text(
-        f"VERDICT: CLEAN\ntree: {head_tree(repo)}\n")
+        f"VERDICT: CLEAN\ntree: {head_tree(repo)}\nreviewer: security-sentinel\n")
     rc, _ = review(repo)
     assert rc == 0
 
@@ -266,12 +268,20 @@ def test_review_clean_on_current_tree_holds(repo):
 def test_review_of_yesterdays_tree_proves_nothing_today(repo):
     (repo / "specs" / "demo" / "reviews").mkdir(parents=True)
     (repo / "specs" / "demo" / "reviews" / "security.md").write_text(
-        f"VERDICT: CLEAN\ntree: {head_tree(repo)}\n")
+        f"VERDICT: CLEAN\ntree: {head_tree(repo)}\nreviewer: security-sentinel\n")
     (repo / "a.txt").write_text("changed after the review\n")
     sh("git", "add", "-A", cwd=repo)
     sh("git", "commit", "-m", "post-review change", cwd=repo)
     rc, out = review(repo)
     assert rc == 1 and "re-review" in out
+
+
+def test_review_without_reviewer_identity_is_not_evidence(repo):
+    (repo / "specs" / "demo" / "reviews").mkdir(parents=True)
+    (repo / "specs" / "demo" / "reviews" / "security.md").write_text(
+        f"VERDICT: CLEAN\ntree: {head_tree(repo)}\n")
+    rc, out = review(repo)
+    assert rc == 1 and "reviewer" in out.lower()
 
 
 def test_review_claiming_a_fantasy_tree_is_rejected(repo):

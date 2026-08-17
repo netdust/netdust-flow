@@ -43,6 +43,7 @@
       "properties": {
         "id":    { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
         "kind":  { "enum": ["agent", "gate", "human"] },
+        "actor": { "type": "string", "minLength": 1 },
         "craft": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
         "run":   { "type": "string" },
         "in":    { "type": "array", "items": { "type": "string" } },

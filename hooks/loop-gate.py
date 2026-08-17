@@ -120,6 +120,16 @@ def read_craft(stdout: str) -> str | None:
     return None
 
 
+def read_actor(stdout: str) -> str | None:
+    """The walker names the actor the next node declares (optional).
+    Journaled so the run record answers WHO the work was assigned to —
+    a declaration, not proof of who performed it (evidence.md)."""
+    for line in stdout.splitlines():
+        if line.startswith("actor: "):
+            return line[len("actor: "):].strip() or None
+    return None
+
+
 def read_progress(stdout: str) -> int | None:
     for line in stdout.splitlines():
         if line.startswith("progress: done="):
@@ -246,10 +256,12 @@ def main() -> None:
     if flow_next:
         marker["node"] = flow_next
     marker_path.write_text(json.dumps(marker))
+    actor = read_actor(check.stdout)
     journal(feature_dir, jbase, gate_events + [
         {"event": "stop", "verdict": "CONTINUE", "decision": "block",
          "node": flow_next or str(flow_node), "iter": iteration,
          "done": done, "dry": int(marker.get("dry", 0)),
+         **({"actor": actor} if actor else {}),
          "reason": reason[:200]}])
 
     log(f"block iter={iteration}/{max_iter} done={done} detail={reason!r}")

@@ -75,7 +75,7 @@ and **with what result**. Where each store stands:
 | --- | --- | --- | --- | --- | --- |
 | attest record | `tree` field (`HEAD^{tree}` at pass time) | `attest.py` running the named `cmd` | the `unit` | `ts` | recorded only on exit 0 |
 | seal record | `tree` field; `--fresh` re-checks it against disk | the human, via `seal.py record` | the `node`'s decision | `ts` | `approved` / `rejected` |
-| review evidence | `tree:` line in the report, checked against the CURRENT `HEAD^{tree}` by `review-check.py` | a fresh-context reviewer (report) + `attest.py` (the record) | the named review scope | attest `ts` | `VERDICT: CLEAN` only |
+| review evidence | `tree:` line in the report, checked against the CURRENT `HEAD^{tree}` by `review-check.py` | the report's required `reviewer:` line (recorded identity) + `attest.py` (the record) | the named review scope | attest `ts` | `VERDICT: CLEAN` only |
 | journal event | not tree-bound | the Stop hook, relaying walker traces | gate exits, stop decisions | per-event `ts` | observability — **never authority** |
 | marker | not tree-bound | the hook | machine position only | — | never evidence |
 
@@ -96,3 +96,19 @@ answer is layered: the stores make honesty the path of least
 resistance and every record auditable; a pretooluse guard should deny
 agent writes to all four outright. Signing records would close the
 rest and is deferred as ceremony until a drill shows a leak.
+
+**Performer identity is recorded, not verified.** A node may declare
+an `actor:` (WHO the work is assigned to — printed by the walker,
+stamped into the journal), and review evidence must carry a
+`reviewer:` line (WHO claims to have reviewed). Both are recorded
+claims: the builder could write the review itself and sign it
+`security-sentinel`, and nothing mechanical would notice. What the
+records buy is that the question "who performed this?" has an
+auditable answer on the run record instead of no answer — and that a
+false answer is a *forged record*, deliberate and on the record,
+rather than an omission nobody can point to. Independence is enforced
+where enforcement works here: the evidence shape (fresh tree-bound
+verdict, attested through `review-check.py`) plus the dispatch
+contract in the pack's craft. Transcript-level verification of who
+actually ran is named as deferred — until a drill shows a leak, the
+same bar as signing.
