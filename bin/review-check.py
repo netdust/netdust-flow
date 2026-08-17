@@ -12,6 +12,12 @@ Requires <record-folder>/reviews/<review-name>.md containing:
 
     VERDICT: CLEAN
     tree: <git rev-parse HEAD^{tree} of the reviewed worktree>
+    reviewer: <who performed the review — persona or agent identity>
+
+The reviewer line is a recorded claim, auditable rather than proven
+(identity assertions stay testimony — evidence.md); what it buys is
+that the run record answers "who reviewed this?" instead of only
+"a review existed".
 
 The reviewer (a fresh-context agent) writes the report; findings
 force fixes; a NEW review of the new tree is required after any
@@ -49,7 +55,17 @@ def main() -> int:
         print(f"FAIL  [review-check]  {name}: report not bound to the "
               f"current tree ({tree[:12]}) — re-review after changes")
         return 1
-    print(f"ok    [review-check]  {name} CLEAN on tree {tree[:12]}")
+    reviewer = next((l[len("reviewer:"):].strip()
+                     for l in text.splitlines()
+                     if l.startswith("reviewer:")), "")
+    if not reviewer:
+        print(f"FAIL  [review-check]  {name}: no `reviewer:` line — the "
+              "record must answer WHO reviewed, not just that a review "
+              "exists (a recorded claim, auditable; independence is the "
+              "dispatch contract's job)")
+        return 1
+    print(f"ok    [review-check]  {name} CLEAN on tree {tree[:12]} "
+          f"by {reviewer}")
     return 0
 
 

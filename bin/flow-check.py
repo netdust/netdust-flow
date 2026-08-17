@@ -219,6 +219,14 @@ def run_gate(node: dict, binds: dict, plugin_root: Path,
     # question the same way, before the run rather than during it.
     prog = flowspec.resolve_program(argv[0], cwd, plugin_root) or Path(argv[0])
     if str(prog).endswith(".py"):
+        # A missing program must BLOCK like every other config problem.
+        # Launching it anyway would surface as the interpreter's exit 2
+        # ("can't open file") — indistinguishable from a gate that MEANS
+        # exit 2, so a deleted seal program would read as a recorded
+        # human rejection and drive a wrong-state edge.
+        if not Path(prog).exists():
+            return None, (f"gate `{node['id']}` program not found: "
+                          f"{argv[0]}"), None
         argv = [sys.executable, str(prog)] + argv[1:]
     else:
         argv = [str(prog)] + argv[1:]
@@ -287,6 +295,15 @@ def walk(doc: dict, start: str, feature_dir: Path, binds: dict,
         declared = (nodes.get(nxt) or {}).get("craft") or []
         if declared:
             print("craft: " + ", ".join(str(c) for c in declared))
+        # The actor the node declares (optional): WHO is supposed to
+        # perform this class of work. Opaque to the runtime — an ID the
+        # agent layer resolves — but printed and journaled so the run
+        # record answers "who was this node's work assigned to", not
+        # just "a node with this name was reached". Declaration, not
+        # enforcement: identity claims stay testimony (evidence.md).
+        actor = (nodes.get(nxt) or {}).get("actor")
+        if actor:
+            print(f"actor: {actor}")
         for t in traces:
             print("trace: " + json.dumps(t))
         return code
