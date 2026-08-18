@@ -97,6 +97,31 @@ evidence; the flow derives state; only verified evidence can finish
 delivery.* Enforced by the lint (I2 — no agent out-edge to `__end__`)
 and exercised end-to-end in `tests/test_trust_boundary.py`.
 
+## Convergence (I7)
+
+Verification asks: is the implementation correct per the CURRENT
+specification? Convergence asks: does the specification still
+faithfully represent the ORIGINAL ask? Different claims, both required
+to finish:
+
+    gates establish that work satisfies a specification;
+    convergence establishes that the specification still represents
+    what was asked; only when both hold may the system finish.
+
+Mechanically: a `gate-converge` node runs `converge-check.py`, which
+verifies the ARTIFACT of a fresh-context convergence judgment — a
+review whose verdict is CONVERGED, bound to sha256 of the ask file,
+sha256 of the current spec, and the tree, signed by an identity that
+is not the spec's author (`--not planner`). NOT_CONVERGED routes red
+back to the plan with the missing items; revising the spec stales the
+report by construction. Place it after the plan gate (cheapest catch
+point) and optionally again before the finish (drift during
+implementation). Empirical basis: runs 0002/0003 in `docs/runs.md` —
+the same task, model and deliberately intent-lossy paperwork, with the
+gate as the only variable; without it the road finished green around a
+dropped deliverable, with it the loss was caught before any
+implementation spend. **runtime (converge-check) + tests**
+
 ## Failure semantics (I6)
 
 Two different safeties, explicitly separated:

@@ -12,6 +12,7 @@ authority" + I6):
   5. a gate crash is red or BLOCKED — never green
   6. a hook/walker crash leaves the marker's node unchanged
   7. review evidence is bound to the exact tree it reviewed (I5)
+  8. convergence evidence is bound to the exact ask+spec it judged (I7)
 
 Honesty note (matches pretooluse-guard.py): the boundary is
 tamper-RESISTANT, not tamper-proof. A byte-perfect forged note written
@@ -305,3 +306,67 @@ def test_review_claiming_a_fantasy_tree_is_rejected(repo):
         "VERDICT: CLEAN\ntree: 0000000000000000000000000000000000000000\n")
     rc, _ = review(repo)
     assert rc == 1
+
+
+# ── 8. convergence evidence bound to the exact ask + spec (I7) ───────
+
+CONVERGE = ROOT / "bin" / "converge-check.py"
+
+
+def sha256_of(p: Path) -> str:
+    import hashlib
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def converge_fixture(repo, verdict="CONVERGED", reviewer="convergence-reviewer",
+                     spec_hash=None):
+    (repo / "ask.md").write_text("build X with a badge\n")
+    (repo / "specs" / "demo" / "spec.md").write_text("R1 X\n")
+    sh("git", "add", "-A", cwd=repo)
+    sh("git", "commit", "-m", "paperwork", cwd=repo)
+    tree = sh("git", "rev-parse", "HEAD^{tree}", cwd=repo).stdout.strip()
+    (repo / "specs" / "demo" / "reviews").mkdir(parents=True, exist_ok=True)
+    (repo / "specs" / "demo" / "reviews" / "convergence.md").write_text(
+        f"VERDICT: {verdict}\n"
+        f"task: {sha256_of(repo / 'ask.md')}\n"
+        f"spec: {spec_hash or sha256_of(repo / 'specs' / 'demo' / 'spec.md')}\n"
+        f"tree: {tree}\n"
+        f"reviewer: {reviewer}\n")
+
+
+def converge(repo):
+    p = sh(sys.executable, str(CONVERGE), "specs/demo", "--task", "ask.md",
+           "--not", "planner", "--not", "implementer", cwd=repo)
+    return p.returncode, p.stdout
+
+
+def test_converged_with_current_bindings_holds(repo):
+    converge_fixture(repo)
+    rc, out = converge(repo)
+    assert rc == 0, out
+
+
+def test_not_converged_is_never_green(repo):
+    converge_fixture(repo, verdict="NOT_CONVERGED")
+    rc, out = converge(repo)
+    assert rc == 1 and "not CONVERGED" in out
+
+
+def test_spec_authors_signature_is_refused(repo):
+    converge_fixture(repo, reviewer="planner")
+    rc, out = converge(repo)
+    assert rc == 1 and "excluded" in out
+
+
+def test_revised_spec_stales_the_convergence_report(repo):
+    converge_fixture(repo)
+    (repo / "specs" / "demo" / "spec.md").write_text("R1 X\nR2 badge\n")
+    rc, out = converge(repo)
+    assert rc == 1 and "CURRENT spec" in out
+
+
+def test_convergence_without_report_is_not_evidence(repo):
+    (repo / "ask.md").write_text("build X\n")
+    (repo / "specs" / "demo" / "spec.md").write_text("R1 X\n")
+    rc, out = converge(repo)
+    assert rc == 1 and "no convergence review" in out
