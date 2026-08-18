@@ -109,6 +109,9 @@ def test_flow_finished_disarms(tmp_path):
 
 def test_flow_blocked_on_human_keeps_marker_updates_node(tmp_path):
     home, cwd = setup(tmp_path, DELIVER, "plan")
+    # `plan` owes plan.md + tasks.md before the walk leaves it (F03)
+    for f in ("plan.md", "tasks.md"):
+        (cwd / "specs" / "demo" / f).write_text("# " + f + "\n")
     rc, out = run_gate(cwd, home)          # gate-check stub passes → human
     assert rc == 0 and out.strip() == ""   # yield, no block
     m = marker_of(cwd)
@@ -184,6 +187,9 @@ def test_journal_records_finish_and_survives_disarm(tmp_path):
 
 def test_journal_records_yield_on_human_node(tmp_path):
     home, cwd = setup(tmp_path, DELIVER, "plan")
+    # `plan` owes plan.md + tasks.md before the walk leaves it (F03)
+    for f in ("plan.md", "tasks.md"):
+        (cwd / "specs" / "demo" / f).write_text("# " + f + "\n")
     run_gate(cwd, home)                      # gate-plan passes → human
     j = journal_of(cwd)
     assert j[-1]["decision"] == "yield" and j[-1]["node"] == "approve-plan"

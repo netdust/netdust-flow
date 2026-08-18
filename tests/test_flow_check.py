@@ -36,6 +36,14 @@ def env(tmp_path):
         GATE_STUB.format(name="gate-check"))
     feature = tmp_path / "feature"
     feature.mkdir()
+    # A node does not leave until it delivered its declared `out:` files
+    # (F03), so a traversal test has to stand where a real run stands:
+    # with the upstream artifacts on disk. tasks.md is deliberately NOT
+    # here — it would switch progress: from node position to checkbox
+    # counting for every test in this file. The plan-start test writes
+    # its own.
+    for name in ("idea.md", "spec.md", "plan.md"):
+        (feature / name).write_text(f"# {name}\n")
     flowstub = tmp_path / "flowstub"
     (flowstub / "bin").mkdir(parents=True)
     baked = """\
@@ -128,6 +136,7 @@ def test_gate_fail_loops_back(env):
 
 def test_plan_pass_blocks_on_human_approval(env):
     plugin, feature, flowstub = env
+    (feature / "tasks.md").write_text("- [ ] T01 — do it\n")
     set_gate(feature, "gate-check", 0)
     rc, out = run(DELIVER, "plan", feature, plugin, flowstub=flowstub)
     assert rc == 2 and next_of(out) == "approve-plan"

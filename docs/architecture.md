@@ -45,7 +45,11 @@ Workflow state
 - **agent** — does work. References craft (skills, subagents) by name;
   produces declared artifacts (`out:`). Landing here CONTINUES the
   loop: the driving session works the node, then stops, and the walker
-  re-derives.
+  re-derives. The walk does not LEAVE the node until every `out:` entry
+  that names a file exists — a gate handed nothing to measure is a gate
+  that reports clean about nothing (run 0004, F03). Prose entries
+  (`code`, `checked tasks`) are declarations for the reader and are
+  never stat()ed.
 - **gate** — verifies work. Runs one command as argv; its exit code is
   written into walk state (`gate.exit`) and consumed by its out-edges.
   Gates are transient: resolved within a single walk.

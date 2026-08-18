@@ -89,6 +89,11 @@ RUNTIME = Path(__file__).resolve().parents[1]
 TASK_RE = re.compile(r"^- \[( |x|X)\] (T\d+)\b(.*)$")
 COND_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_.]*)\s*(==|!=|>=|<=|>|<|in)\s+(.+?)\s*$")
 PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+# An `out:` entry that names a FILE, as opposed to a prose outcome. A
+# flow declares both — `plan.md` is checkable, `checked tasks` and
+# `seal approve-plan` are not — and only the first kind is a promise a
+# stat() can hold anyone to.
+ARTIFACT_RE = re.compile(r"^[\w.@+-]+(?:/[\w.@+-]+)*\.[A-Za-z0-9]+$")
 MAX_HOPS = 50
 
 FINISHED, CONTINUE, BLOCKED = 0, 1, 2
@@ -242,6 +247,31 @@ def run_gate(node: dict, binds: dict, plugin_root: Path,
     return p.returncode, brief, prog
 
 
+# ── declared artifacts (I: a node delivers what it declares) ─────────
+
+def undelivered(node: dict, feature_dir: Path, cwd: Path) -> list[str]:
+    """The declared `out:` files this node has NOT produced.
+
+    Run 0004's gate-plan could not fail on a missing plan — its whole
+    plan-stage check sat behind `if plan.exists()`, so nothing on disk
+    read as "structure clean". A project can always write that gate
+    wrong; the flow, however, already SAYS what the node owes, and
+    nothing was reading it. Reading it here fixes the class rather than
+    the instance: every gate a project will ever write inherits it.
+
+    Prose entries are skipped, not guessed at. `out: [code, checked
+    tasks]` is a real and useful declaration for a human reader, and
+    treating it as a filename would park every run at `build`."""
+    missing = []
+    for entry in node.get("out") or []:
+        name = str(entry).strip()
+        if not ARTIFACT_RE.match(name):
+            continue
+        if not (cwd / feature_dir / name).exists():
+            missing.append(name)
+    return missing
+
+
 # ── progress (unchanged dry-loop food) ───────────────────────────────
 
 def progress(feature_dir: Path, node_pos: int, node_total: int) -> str:
@@ -330,6 +360,17 @@ def walk(doc: dict, start: str, feature_dir: Path, binds: dict,
                 what = ", ".join(node.get("out", [])) or "your decision"
                 return emit(f"FLOW: BLOCKED — `{cur}` needs a human: {what}",
                             cur, BLOCKED)
+
+        # The node the session just worked on owes its declared files
+        # before the walk carries anything downstream. `first` is the
+        # only place an agent node is passed THROUGH rather than landed
+        # on, so this is the one seam where the debt can go unnoticed.
+        if first and node is not None and kind == "agent":
+            owed = undelivered(node, feature_dir, cwd)
+            if owed:
+                return emit(
+                    f"FLOW: CONTINUE — node: {cur} — declared artifacts not "
+                    f"delivered: {', '.join(owed)}", cur, CONTINUE)
 
         if node is not None and kind == "gate":
             if cur in ran_gates:

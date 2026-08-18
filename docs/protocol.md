@@ -20,7 +20,10 @@ keys rejected):
                          # project `.flow/craft/` first, then the
                          # plugin root, same order as a gate program
   in:  [spec.md]         # optional: declared inputs
-  out: [plan.md]         # optional: declared outputs
+  out: [plan.md]         # optional: declared outputs — an entry that
+                         # names a FILE is enforced: the walk will not
+                         # leave this node until it exists (runtime).
+                         # Prose entries ("code") are for the reader.
 
 - id: gate-x
   kind: gate
