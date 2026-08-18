@@ -20,6 +20,7 @@
         "bin/seal.py",
         "bin/floor-check.py",
         "bin/review-check.py",
+        "bin/converge-check.py",
         "bin/flow-eval.py"
     ]
 }

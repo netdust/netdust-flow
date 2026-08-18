@@ -92,6 +92,20 @@ about a codebase is not something a runtime can know.
   gate when missing. Enforced by the project's gate command and the
   ledger, not the lint (a flow file cannot see plan content).
 
+- **I7** (v1, from runs 0002/0003) — **convergence is a gate, not a
+  suggestion.** Gates establish that work satisfies a specification;
+  convergence establishes that the specification still represents what
+  was asked. Only when both hold may delivery finish. The judgment is
+  an agent's, but it becomes state only as evidence:
+  `bin/converge-check.py` verifies a fresh-context convergence review
+  bound to sha256(ask) + sha256(spec) + tree, signed by someone other
+  than the spec's author; NOT_CONVERGED is a red exit and a revised
+  spec stales the report by construction. The controlled pair that
+  forced this: without the gate the road delivered a consumer-less
+  endpoint with every gate green ("verification integrity without
+  intent preservation"); with it, the dropped deliverable was caught
+  at plan time.
+
 - **I6** (v1, from external review) — **fail-open for interaction,
   fail-closed for state.** A broken harness must never trap a session,
   and a crash must never produce evidence or advance the flow: a hook
@@ -101,9 +115,9 @@ about a codebase is not something a runtime can know.
   must not read as a human rejection). The two safeties are different
   properties and are tested separately.
 
-All six are the same rule at different altitudes: **no assertion is a
+All seven are the same rule at different altitudes: **no assertion is a
 signal.** I1, I2, and I4's shape are enforced by `bin/flow-lint.py`;
-I3 by the attest/ledger design; I5 by the plan gate + ledger; I6 —
+I3 by the attest/ledger design; I5 by the plan gate + ledger; I6 and I7 —
 with the trust boundary end to end — by `tests/test_trust_boundary.py`.
 
 ## Documentation
@@ -171,6 +185,10 @@ Two ways to get the runtime, both pinned, both deliberate:
   carries the next node's craft by name.
 - `bin/attest.py` / `bin/ledger.py` — evidence recorded by the
   verifier into git notes; delivery state derived on request.
+- `bin/converge-check.py` — the I7 gate: verifies an attested
+  fresh-context convergence review (does the spec still represent the
+  original ask?) bound to sha256(ask)+sha256(spec)+tree, reviewer not
+  the spec's author. NOT_CONVERGED and stale bindings are red.
 - `bin/review-check.py` — the check an I5 review task runs through
   attest.py: a report exists, its verdict is CLEAN, and it is bound to
   the exact tree it reviewed. Run 0002's caught defect came through
