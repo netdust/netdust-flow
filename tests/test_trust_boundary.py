@@ -13,6 +13,8 @@ authority" + I6):
   6. a hook/walker crash leaves the marker's node unchanged
   7. review evidence is bound to the exact tree it reviewed (I5)
   8. convergence evidence is bound to the exact ask+spec it judged (I7)
+  9. --fresh is strict on commits, discriminating on working-tree noise (E4)
+ 10. a mutated ask stales the convergence report (E9 / I7 binding)
 
 Honesty note (matches pretooluse-guard.py): the boundary is
 tamper-RESISTANT, not tamper-proof. A byte-perfect forged note written
@@ -370,3 +372,51 @@ def test_convergence_without_report_is_not_evidence(repo):
     (repo / "specs" / "demo" / "spec.md").write_text("R1 X\n")
     rc, out = converge(repo)
     assert rc == 1 and "no convergence review" in out
+
+
+# ── 9. --fresh: strict on commits, discriminating on working-tree noise (E4) ─
+# B (uncommitted edit outside the feature dir stays fresh) and D (uncommitted
+# edit inside stales) are pinned in test_evidence.py. E4 adds C: a COMMITTED
+# change ANYWHERE stales a --fresh seal — the runtime refuses to judge whether
+# a committed file outside the feature dir is relevant to a ship decision, so
+# it re-asks. That strictness is the fail-safe, and it must not silently relax.
+
+def test_fresh_seal_stales_on_any_commit_even_outside_feature(repo):
+    (repo / "README.md").write_text("# readme\n")
+    sh("git", "add", "-A", cwd=repo)
+    sh("git", "commit", "-m", "readme", cwd=repo)
+    sh(sys.executable, str(SEAL), "record", "specs/demo", "shakeout",
+       "approved", cwd=repo)
+    # right after the seal: fresh
+    rc0 = sh(sys.executable, str(SEAL), "check", "specs/demo", "shakeout",
+             "--fresh", cwd=repo).returncode
+    assert rc0 == 0
+    # a committed change OUTSIDE the feature dir still stales it (strict)
+    (repo / "README.md").write_text("# readme\nchanged\n")
+    sh("git", "commit", "-am", "readme tweak", cwd=repo)
+    rc1 = sh(sys.executable, str(SEAL), "check", "specs/demo", "shakeout",
+             "--fresh", cwd=repo).returncode
+    assert rc1 == 1, "a post-seal commit must re-ask, even outside the feature dir"
+
+
+# ── 10. a mutated ask stales the convergence report (E9) ────────────
+
+def test_mutated_ask_stales_the_convergence_report(repo):
+    (repo / "ask.md").write_text("build X with a badge\n")
+    (repo / "specs" / "demo" / "spec.md").write_text("R1 X\n")
+    sh("git", "add", "-A", cwd=repo)
+    sh("git", "commit", "-m", "paperwork", cwd=repo)
+    tree = sh("git", "rev-parse", "HEAD^{tree}", cwd=repo).stdout.strip()
+    (repo / "specs" / "demo" / "reviews").mkdir(parents=True, exist_ok=True)
+    (repo / "specs" / "demo" / "reviews" / "convergence.md").write_text(
+        f"VERDICT: CONVERGED\n"
+        f"task: {sha256_of(repo / 'ask.md')}\n"
+        f"spec: {sha256_of(repo / 'specs' / 'demo' / 'spec.md')}\n"
+        f"tree: {tree}\n"
+        f"reviewer: convergence-reviewer\n")
+    # converged now
+    assert converge(repo)[0] == 0
+    # mutate the ask AFTER convergence — the report must go stale
+    (repo / "ask.md").write_text("build X with a badge AND an admin page\n")
+    rc, out = converge(repo)
+    assert rc == 1 and "current task" in out, out

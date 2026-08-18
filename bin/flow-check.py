@@ -383,6 +383,8 @@ def main() -> int:
                     default=Path.home() / ".claude" / "plugins" / "netdust-agent")
     ap.add_argument("--timeout", type=int, default=600)
     ap.add_argument("--cwd", type=Path, default=Path.cwd())
+    ap.add_argument("--require-anchor", action="store_true",
+                    help="I8: refuse to walk a twin that was not armed")
     args = ap.parse_args()
 
     binds = {"feature_dir": str(args.feature_dir)}
@@ -397,6 +399,19 @@ def main() -> int:
         doc = load_flow(args.flow, args.cwd)
     except Exception as e:
         print(f"FLOW: BLOCKED — cannot load flow: {e}")
+        return BLOCKED
+
+    # I8: an armed flow may only execute the graph it was armed on.
+    # Enforcement triggers on the flag (from the marker) OR on the mere
+    # presence of an anchor ref, so dropping the marker flag cannot
+    # silently disable it. Fail closed: enforce-but-no-valid-anchor
+    # BLOCKS. To change the graph, re-arm (writes a fresh anchor).
+    enforce = args.require_anchor or flowspec.anchor_ref_exists(args.cwd)
+    if enforce and not flowspec.anchor_valid_for(args.flow, args.cwd):
+        print("FLOW: BLOCKED — the compiled twin is not the graph that "
+              "was armed (no arm-time anchor for this exact twin). The "
+              "flow graph is immutable during an armed run; to change it, "
+              "re-arm with flow-arm. [I8: graph anchoring]")
         return BLOCKED
 
     return walk(doc, args.node, args.feature_dir, binds,

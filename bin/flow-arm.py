@@ -476,6 +476,15 @@ def main() -> int:
         "max_dry": max_dry,
         "gate_timeout": args.gate_timeout,
     }
+    # I8: anchor the compiled twin so the walk can only execute the
+    # graph that was armed. Written here inside flow-arm's own process;
+    # the guard denies agent-issued `git notes`, so the anchor cannot be
+    # forged or removed via the documented path. Re-arming re-anchors.
+    anchor_sha = flowspec.write_anchor(
+        twin, project, meta=json.dumps({"flow": doc.get("flow")}))
+    if anchor_sha:
+        marker["require_anchor"] = True
+
     marker_path.parent.mkdir(parents=True, exist_ok=True)
     marker_path.write_text(json.dumps(marker, indent=2) + "\n")
 

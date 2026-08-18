@@ -46,7 +46,9 @@ forge of the twins and journal (and `git notes` writes); the marker
 is left editable on purpose, since arming writes it — that residue is
 named in the guard. This hook deliberately does not re-verify the
 marker's provenance: the gate is deterministic, the guard raises the
-cost of the obvious tamper.
+cost of the obvious tamper. I8 anchors the GRAPH itself: this hook
+passes --require-anchor from the marker so the walker refuses a twin
+that was not armed (rewriting the road mid-run is BLOCKED, not silent).
 """
 
 import hashlib
@@ -176,6 +178,8 @@ def main() -> None:
     argv = [sys.executable, str(flow_check), str(feature_dir),
             "--flow", str(flow_path), "--node", str(flow_node),
             "--cwd", str(cwd), "--timeout", str(gate_timeout)]
+    if marker.get("require_anchor"):
+        argv.append("--require-anchor")
     for k, v in (marker.get("binds") or {}).items():
         argv += ["--bind", f"{k}={v}"]
     check = subprocess.run(argv, capture_output=True, text=True,
