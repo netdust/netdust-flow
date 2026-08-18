@@ -202,3 +202,57 @@ def flatten(doc: dict, load, base_dir: Path, project: Path | None,
     merged.pop("extends", None)
     merged.pop("remove", None)
     return merged
+
+
+# ── I8: graph anchoring ──────────────────────────────────────────────
+# An armed flow may only execute the exact graph present when it was
+# armed. flow-arm writes a note keyed by the twin's git blob sha into
+# ANCHOR_REF (inside its own process, so the pretooluse guard's
+# git-notes deny covers forgery/removal); the walker recomputes the
+# blob sha and refuses a twin that carries no matching anchor. Editing
+# the graph changes the blob → no anchor → BLOCK, until a deliberate
+# re-arm writes a new anchor. Stdlib only (subprocess); the hook path
+# takes no authoring deps and git is already the evidence substrate.
+
+ANCHOR_REF = "refs/notes/flow-anchor"
+
+
+def _git(cwd, *args):
+    import subprocess
+    return subprocess.run(["git", *args], cwd=str(cwd),
+                          capture_output=True, text=True)
+
+
+def twin_blob_sha(twin, cwd, write=False):
+    """The git blob sha of the twin's exact bytes. `write` stores the
+    blob so a note can attach to it. None if git is unavailable."""
+    args = ["hash-object"] + (["-w"] if write else []) + [str(twin)]
+    p = _git(cwd, *args)
+    sha = p.stdout.strip()
+    return sha if (p.returncode == 0 and sha) else None
+
+
+def anchor_ref_exists(cwd):
+    return _git(cwd, "rev-parse", "--verify", "--quiet",
+                ANCHOR_REF).returncode == 0
+
+
+def anchor_valid_for(twin, cwd):
+    """True iff the CURRENT twin's blob carries an anchor note — i.e.
+    this is the exact graph that was armed."""
+    sha = twin_blob_sha(twin, cwd)
+    if not sha:
+        return False
+    return _git(cwd, "notes", "--ref=" + ANCHOR_REF, "show",
+                sha).returncode == 0
+
+
+def write_anchor(twin, cwd, meta=""):
+    """Arm-time: store the twin blob and attach the anchor note. Returns
+    the blob sha, or None if git is unavailable."""
+    sha = twin_blob_sha(twin, cwd, write=True)
+    if not sha:
+        return None
+    _git(cwd, "notes", "--ref=" + ANCHOR_REF, "add", "-f", "-m",
+         meta or "armed", sha)
+    return sha

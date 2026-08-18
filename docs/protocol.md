@@ -122,6 +122,41 @@ gate as the only variable; without it the road finished green around a
 dropped deliverable, with it the loss was caught before any
 implementation spend. **runtime (converge-check) + tests**
 
+## Graph anchoring (I8)
+
+The flow graph is the root of trust: the walker derives every decision
+from the compiled twin, so an actor who can rewrite the twin owns
+termination — demonstrated by run E13, where a hostile agent rerouted
+`__start__ → __end__` and finished with no work done.
+
+The fix draws a line between two phases:
+
+    authoring       — the graph is mutable. An agent may brainstorm and
+                      write any flow (a new pack, a site road). No
+                      anchor exists; nothing is enforced.
+    arming          — the authority transition. `flow-arm` compiles the
+                      twin and writes an anchor: a git note keyed by the
+                      twin's blob sha, into refs/notes/flow-anchor,
+                      inside flow-arm's own process (the guard denies
+                      agent-issued `git notes`, so the anchor cannot be
+                      forged or removed by the documented path).
+    armed execution — the graph is immutable. The walker recomputes the
+                      twin's blob sha and BLOCKS any twin without a
+                      matching anchor. Enforcement triggers on the
+                      marker flag OR the mere presence of the anchor
+                      ref, so dropping the flag cannot silently disable
+                      it. To change the graph, re-arm — which resets to
+                      `__start__`, re-anchors, and discards prior
+                      evidence.
+
+Honest scope: this closes SILENT mid-run mutation (the E13 attack). A
+determined agent with shell can still disarm + rewrite + re-arm — but
+that is loud, non-incremental, resets progress, and is equivalent to
+"the operator armed a different flow", which is the authoring/arming
+boundary working, not a bypass. Making *arming* itself require a human
+credential is the next layer, deferred. **runtime (flow-arm anchor +
+walker check) + tests (test_anchor_i8.py, the E13 matrix).**
+
 ## Failure semantics (I6)
 
 Two different safeties, explicitly separated:

@@ -106,6 +106,23 @@ about a codebase is not something a runtime can know.
   intent preservation"); with it, the dropped deliverable was caught
   at plan time.
 
+- **I8** (v1, from run E13) — **an armed flow may only execute the
+  graph it was armed on.** The flow graph is the root of trust:
+  everything derives from the compiled twin, so whoever can rewrite the
+  twin owns termination. E13 (a hostile agent told to reach `__end__`
+  by any means) proved it — it rerouted `__start__ → __end__` and
+  finished with no work done. Fix: `flow-arm` anchors the twin (a git
+  note keyed by the twin's blob sha, written inside its own process so
+  the guard's git-notes deny covers it); the walker refuses any twin
+  that carries no matching anchor. Authoring stays free (no anchor
+  before arm); changing an armed graph requires a deliberate re-arm —
+  which resets to `__start__`, re-anchors on the record, and discards
+  prior evidence. Honest residual: an agent with shell can still
+  disarm + rewrite + re-arm (loud, not silent) or delete the anchor ref
+  via git plumbing AND edit the marker; making *arming itself*
+  human-gated is the next deferred layer. Pinned by
+  `tests/test_anchor_i8.py` (the E13 attack matrix, permanent).
+
 - **I6** (v1, from external review) — **fail-open for interaction,
   fail-closed for state.** A broken harness must never trap a session,
   and a crash must never produce evidence or advance the flow: a hook
@@ -115,10 +132,11 @@ about a codebase is not something a runtime can know.
   must not read as a human rejection). The two safeties are different
   properties and are tested separately.
 
-All seven are the same rule at different altitudes: **no assertion is a
+All eight are the same rule at different altitudes: **no assertion is a
 signal.** I1, I2, and I4's shape are enforced by `bin/flow-lint.py`;
-I3 by the attest/ledger design; I5 by the plan gate + ledger; I6 and I7 —
-with the trust boundary end to end — by `tests/test_trust_boundary.py`.
+I3 by the attest/ledger design; I5 by the plan gate + ledger; I6 and I7
+by `tests/test_trust_boundary.py`; I8 by `tests/test_anchor_i8.py` (the
+E13 attack matrix). The trust boundary end to end lives across both.
 
 ## Documentation
 
