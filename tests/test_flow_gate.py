@@ -143,6 +143,24 @@ def test_flow_max_dry_override(tmp_path):
     assert marker_of(cwd) is None           # disarmed as dry loop
 
 
+def test_the_block_reason_does_not_exclude_the_project_harness(tmp_path):
+    """F07. `craft:` exists so a node's declared skills actually reach
+    the agent (run 0001 lost that). The word "only" was there to stop
+    craft-drift, but it read as "and nothing else": run 0004's plan and
+    build nodes ran with no threat model, no security pillars per
+    data-flow, no layering checklist and no independent test-author,
+    because the instruction appeared to forbid the project's own
+    harness. Naming the craft must not deselect the stack."""
+    home, cwd = setup(tmp_path, DELIVER, "spec")
+    rc, out = run_gate(cwd, home)
+
+    reason = json.loads(out)["reason"]
+    assert "craft" in reason.lower(), "the declaration must still arrive"
+    assert "craft only" not in reason.lower()
+    assert "project" in reason.lower(), (
+        "the reason has to say the project's own skills still apply")
+
+
 def journal_of(cwd):
     p = cwd / "specs" / "demo" / ".flow-journal.jsonl"
     if not p.exists():

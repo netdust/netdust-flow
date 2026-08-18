@@ -382,12 +382,20 @@ def main() -> None:
 
     log(f"block iter={iteration}/{max_iter} done={done} detail={reason!r}")
     craft = read_craft(check.stdout)
+    # The craft is DECLARED here so it actually reaches the agent (run
+    # 0001 lost a node's craft because the reason never named it). It is
+    # not a deselection of everything else: run 0004's plan and build
+    # nodes ran with no threat model, no per-data-flow security pillars
+    # and no independent test-author because "with that craft only" read
+    # as "and nothing else" — the project's own harness included.
     guidance = (
-        (f"Craft for this node: {craft}. Work the node with that craft "
-         "only; " if craft else
-         "Work the named node with its declared craft only; ")
-        + "HALT at ── REVIEW GATE ── markers as normal. To stop the loop, "
-          "delete "
+        (f"Craft for this node: {craft}. Load it and work the node "
+         "through it" if craft else
+         "Work the named node through its declared craft")
+        + " — that names this node's skills and agents, and does not "
+          "replace the project's own harness, stack skills or plan-time "
+          "gates, which apply as they always do. HALT at "
+          "── REVIEW GATE ── markers as normal. To stop the loop, delete "
     )
     print(json.dumps({
         "decision": "block",
