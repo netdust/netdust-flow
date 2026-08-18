@@ -1,5 +1,20 @@
 # The craft loop — memory + improve-skill
 
+> **Status: the machinery below was retired in V1** (see `docs/runs.md`
+> and the trim commit) — `craft-memory.py`, `skill-eval.py`, and
+> `flows/improve-skill.yaml` no longer ship in the kernel, because
+> netdust-agent already carries skill evals and one consumer could not
+> keep them honest here. The *idea* is what survives, and it is one of
+> the better ones in the project: **routing ≠ authority ≠
+> verification.** A capable worker may learn and may route freely
+> inside the system, without ever being granted authority to redefine
+> the system's termination conditions. The referee is frozen precisely
+> so the worker can be trusted to move fast within it. That distinction
+> outlived the tools that first expressed it, and now underwrites I8
+> (an agent authors and routes; it does not get to re-author the armed
+> graph). The rest of this document is preserved as the original design
+> of the retired loop.
+
 netdust-flow's gates and seals are the **referee**: deterministic,
 frozen, never learning. The **craft** (the `craft:` skills/agents on
 each agent node) is the **worker** — and the worker *can* learn. This is

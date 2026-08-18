@@ -149,7 +149,7 @@ E13 attack matrix). The trust boundary end to end lives across both.
 | [`docs/runs.md`](docs/runs.md) | The run ledger — every flow-driven delivery, measured. |
 | [`docs/project-pack.md`](docs/project-pack.md) | How a project owns its own flow and gates — the runtime supplies the machine, never the checks. |
 | [`docs/examples.md`](docs/examples.md) | Index of the example flows under `examples/`. |
-| [`docs/essays/`](docs/essays/) | The thinking, kept but out of the working set: the essay, the theory verdict, the category comparison, the measurement rationale, and the retired craft loop. |
+| [`docs/essays/`](docs/essays/) | The intellectual record, three-document spine: [`article.md`](docs/essays/article.md) — why completion authority is the missing abstraction; [`theory.md`](docs/essays/theory.md) — the foundation, with the v1 empirical addendum (what the evals demonstrated, what stays open); [`evaluation.md`](docs/essays/evaluation.md) — the evidence record (E1–E13, failures visible). Supporting: `comparison.md`, `craft-loop.md`. |
 
 ## Install
 

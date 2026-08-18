@@ -42,3 +42,24 @@ Use something else when: the work has no mechanical exit check
 at scale (this is a solo-operation design), or when process durability
 across infrastructure is the hard problem (that's Temporal's job, not
 a Stop hook's).
+
+---
+
+## Addendum — the axis was never loops vs graphs
+
+This comparison is framed around workflow shape (loops, graphs, CI,
+orchestration). After the eval program that framing reads as too
+shallow. The graph is not the fundamental point; it is a *mechanism*
+for making one thing inspectable and enforceable: **who has authority
+to advance and finish delivery.** The real axis is
+
+    agent autonomy  ⟷  controlled delivery authority
+
+and every system above sits somewhere on it. Agent frameworks maximise
+autonomy; CI checks artifacts but holds no authority over the loop;
+netdust-flow constrains autonomy *only* at the authority transitions
+(intent, arming, evidence) and leaves the agent free to route
+everywhere else. A loop with the same three recorded, enforced
+transitions would make the same claim; a graph with none of them would
+not. Compare systems by which authority transitions they make external
+and checkable — not by whether they draw the work as a loop or a graph.
