@@ -12,7 +12,9 @@ at plan time, citing the ask's own wording.
 
     converge-check.py <feature-dir> --task <file> [--not <identity> ...]
 
-Requires <feature-dir>/reviews/convergence.md:
+Requires <feature-dir>/reviews/convergence*.md (the newest is read,
+so archiving a round by renaming it keeps both the record and the
+gate — F08):
 
     VERDICT: CONVERGED            (anything else exits 1)
     task: <sha256 of the --task file>
@@ -45,10 +47,20 @@ def main() -> int:
         print("FAIL  [converge-check]  usage: converge-check.py <fd> --task FILE [--not id ...]")
         return 1
     fd = Path(argv[0])
-    report = fd / "reviews" / "convergence.md"
-    if not report.exists():
-        print(f"FAIL  [converge-check]  no convergence review at {report}")
+    # The NEWEST matching report, not one fixed filename. Archiving a
+    # round by renaming it (`convergence-round1.md`) is a reasonable
+    # instinct and the record is worth keeping — but it used to leave
+    # this gate reading a name that no longer existed, and that failure
+    # looked exactly like "no review was ever done" (run 0004, F08). A
+    # superseded round is still caught, by the binding checks below,
+    # which say something true about why.
+    reports = sorted((fd / "reviews").glob("convergence*.md"),
+                     key=lambda p: p.stat().st_mtime)
+    if not reports:
+        print(f"FAIL  [converge-check]  no convergence review at "
+              f"{fd / 'reviews'}/convergence*.md")
         return 1
+    report = reports[-1]
     text = report.read_text()
     def line(prefix):
         return next((l[len(prefix):].strip() for l in text.splitlines()
