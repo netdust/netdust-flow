@@ -1,0 +1,34 @@
+name: Agent eval harness smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  agent-eval-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run flow-eval through agent-v0
+        run: |
+          python evals/agent-v0.py \
+            --baseline evals/fixtures/baseline \
+            --netdust evals/fixtures/netdust \
+            --json > agent-v0.json
+          python - <<'PY'
+          import json
+          d = json.load(open('agent-v0.json'))
+          assert d['status'] == 'ok'
+          assert d['baseline']['runs'] == 1
+          assert d['netdust']['runs'] == 1
+          print('agent-v0 smoke: OK')
+          PY
+      - name: Upload eval report
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-v0-smoke
+          path: agent-v0.json
