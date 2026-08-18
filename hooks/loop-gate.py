@@ -20,7 +20,10 @@ Decision table (marker present, stop_hook_active false):
   flow-check exit 1 (CONTINUE) → block with the next node, UNLESS a
                                  guardrail disarms first:
     • iteration >= max_iterations           → disarm, allow (budget spent)
-    • done-count unchanged 2 stops in a row → disarm, allow (dry loop)
+    • nothing moved max_dry stops in a row  → disarm, allow (dry loop).
+      "Nothing moved" is the done-count AND the worktree AND the gate
+      exits, all unchanged. Checkbox-only dryness disarmed the loops
+      whose work does not tick checkboxes (run 0004, F04).
 
 Guardrails that always win: stop_hook_active bypass (one block per stop
 cycle), marker deletion by the human, and fail-open — any internal error
@@ -28,8 +31,11 @@ allows the stop. Logs to ~/.claude/logs/memory-hook.log.
 
 Marker schema (tasks/.netdust-flow.json — runtime state, gitignored by
 /flow; run_id is minted here at the first stop of an armed run):
-  {"feature_dir": "specs/<feature>", "iteration": 0, "max_iterations": 25,
+  {"schema": "netdust-flow/1",
+   "feature_dir": "specs/<feature>", "iteration": 0, "max_iterations": 25,
    "last_done": 0, "dry": 0,
+   "session": "<claimed at the first stop; other sessions no-op>",
+   "tree": "<worktree fingerprint>", "gate_sig": "<gate exits>",
    "flow": "<abs path to flows/*.json twin>", "node": "__start__",
    "flow_check": "<abs path to netdust-flow/bin/flow-check.py>",
    "binds": {"gate_check_cmd": "...",
@@ -134,6 +140,66 @@ def read_actor(stdout: str) -> str | None:
         if line.startswith("actor: "):
             return line[len("actor: "):].strip() or None
     return None
+
+
+def worktree_fingerprint(cwd: Path, feature_dir: Path) -> str | None:
+    """A cheap digest of "did anything actually change".
+
+    `dry` used to mean "no checkbox ticked", which is not the same thing
+    at all: a convergence loop produces findings, revises the spec and
+    rewrites its report while the task ledger stands still. Run 0004
+    needed three such rounds and the default max_dry of 2 would have
+    disarmed a healthy run even with no observer in the repo.
+
+    Three sources, none of which touches the repo:
+      · HEAD               — a commit landed
+      · `git status`       — files appeared, vanished, or became dirty
+      · size+mtime of the  — the case status alone cannot see: a file
+        dirty paths and      that was ALREADY modified being edited
+        the feature dir      again, which is most of a review round
+
+    Fail-open by returning None (no git, not a repo, anything at all),
+    which restores the old done-count-only comparison rather than
+    trapping or freeing a run on a technicality."""
+    try:
+        def git(*args: str) -> str | None:
+            p = subprocess.run(["git", *args], capture_output=True,
+                               text=True, cwd=str(cwd), timeout=30)
+            return p.stdout if p.returncode == 0 else None
+
+        head = git("rev-parse", "HEAD")
+        status = git("status", "--porcelain")
+        if head is None or status is None:
+            return None
+
+        parts = [head, status]
+        paths = [line[3:].strip() for line in status.splitlines() if line[3:]]
+        for name in sorted(set(paths)):
+            parts.append(stamp(cwd / name.strip('"')))
+        # The feature dir is where review rounds do their work, and its
+        # files are often already dirty, so status alone under-reports it.
+        for path in sorted((cwd / feature_dir).rglob("*")):
+            if path.name.startswith(".flow-journal"):
+                continue   # written BY this hook; it is not the run's work
+            parts.append(stamp(path))
+        return hashlib.sha256("\0".join(parts).encode()).hexdigest()[:16]
+    except Exception:
+        return None
+
+
+def stamp(path: Path) -> str:
+    try:
+        st = path.stat()
+        return f"{path}:{st.st_size}:{st.st_mtime_ns}"
+    except OSError:
+        return f"{path}:-"
+
+
+def gate_signature(events: list[dict]) -> str:
+    """Which gates ran in this walk and what they answered. A red gate
+    going green is movement, even before a box is ticked."""
+    return ";".join(f"{e.get('node')}={e.get('exit')}" for e in events
+                    if e.get("event") == "gate")
 
 
 def read_progress(stdout: str) -> int | None:
@@ -274,22 +340,33 @@ def main() -> None:
         log(f"disarm reason=budget-exhausted iter={iteration} max={max_iter}")
         return
 
+    # DRYNESS (F04). A stop is dry only when NOTHING moved: not the
+    # done-count, not the worktree, not the gate answers. Counting a
+    # stop dry because no checkbox ticked disarms exactly the loops
+    # whose work does not tick checkboxes — convergence and review.
     done = read_progress(check.stdout)
+    fingerprint = worktree_fingerprint(cwd, Path(marker.get("feature_dir", "")))
+    gate_sig = gate_signature(gate_events)
+    moved = (
+        (done is not None and done > int(marker.get("last_done", -1)))
+        or (fingerprint is not None and fingerprint != marker.get("tree"))
+        or (gate_sig != marker.get("gate_sig", ""))
+    )
+    marker["tree"] = fingerprint
+    marker["gate_sig"] = gate_sig
     if done is not None:
-        if done <= int(marker.get("last_done", -1)):
-            marker["dry"] = int(marker.get("dry", 0)) + 1
-        else:
-            marker["dry"] = 0
         marker["last_done"] = done
-        if marker["dry"] >= int(marker.get("max_dry", MAX_DRY)):
-            journal(feature_dir, jbase, gate_events + [
-                {"event": "stop", "verdict": "CONTINUE",
-                 "decision": "disarm-dry",
-                 "node": flow_next or str(flow_node),
-                 "iter": iteration, "done": done}])
-            marker_path.unlink(missing_ok=True)
-            log(f"disarm reason=dry-loop iter={iteration} done={done}")
-            return
+    marker["dry"] = 0 if moved else int(marker.get("dry", 0)) + 1
+    if marker["dry"] >= int(marker.get("max_dry", MAX_DRY)):
+        journal(feature_dir, jbase, gate_events + [
+            {"event": "stop", "verdict": "CONTINUE",
+             "decision": "disarm-dry",
+             "node": flow_next or str(flow_node),
+             "iter": iteration, "done": done,
+             "tree": fingerprint, "gates": gate_sig}])
+        marker_path.unlink(missing_ok=True)
+        log(f"disarm reason=dry-loop iter={iteration} done={done}")
+        return
 
     marker["iteration"] = iteration
     if flow_next:

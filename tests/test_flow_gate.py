@@ -38,6 +38,12 @@ def setup(tmp_path, flow, node, binds=None, extra=None):
     cwd = tmp_path / "proj"
     (cwd / "specs" / "demo").mkdir(parents=True)
     (cwd / "tasks").mkdir()
+    # What flow-arm's ensure_gitignore() writes on every real arm. It
+    # matters to the dry counter (F04): the hook's own journal and
+    # marker must not read as worktree movement, or every second stop
+    # looks like progress the run did not make.
+    (cwd / ".gitignore").write_text(
+        "tasks/.netdust-flow.json\n.flow-journal.jsonl\n")
     # real repo: floor-check (fail-closed on missing base) and seal need one
     for git_args in (["init", "-b", "main"],
                      ["config", "user.email", "t@t"],

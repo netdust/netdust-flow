@@ -53,11 +53,21 @@ Authoring-side, like the lint: PyYAML, never in the hook path.
 ## The Stop hook (`hooks/loop-gate.py`)
 
 Fires at every session stop. No marker → no-op. A marker without
-`flow` + `node` is not ours and is left untouched. Otherwise it runs
-the walker and acts on the exit code (see protocol.md, completion
+`flow` + `node`, or one declaring another harness's `schema`, is not
+ours and is left untouched. A marker claimed by ANOTHER SESSION is not
+ours either: the first stop after arming writes its session id into the
+marker and every other session in the repo then no-ops, because a
+session that is only watching produces stops that move no counter and
+those stops used to disarm the run they were watching (F01).
+`flow-arm --reclaim` releases a claim stranded by a dead session.
+Otherwise it runs the walker and acts on the exit code (see protocol.md, completion
 semantics): FINISHED disarms, BLOCKED yields keeping the marker,
 CONTINUE blocks the stop with the next node — unless the iteration
-budget or the dry-loop counter disarms first. Fail-open by contract: a
+budget or the dry-loop counter disarms first. A stop counts as dry only
+when NOTHING moved: done-count, worktree fingerprint and gate exits all
+unchanged. Dryness used to mean "no checkbox ticked", which disarmed
+precisely the loops whose work ticks no checkbox — three legitimate
+convergence rounds exhaust a max_dry of 2 (F04). Fail-open by contract: a
 crashing hook must never trap a session.
 
 Each invocation appends journal events to
