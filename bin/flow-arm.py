@@ -65,6 +65,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -273,6 +274,76 @@ def check_requires(pack: dict, r: Refusals) -> list[tuple[str, str]]:
     return warnings
 
 
+# ── hook wiring ──────────────────────────────────────────────────────
+
+OUR_HOOKS = ("loop-gate.py", "pretooluse-guard.py")
+ANCHORED_PREFIXES = ("/", "~", "$CLAUDE_PROJECT_DIR", "${CLAUDE_PROJECT_DIR}",
+                     "$HOME", "${HOME}")
+
+
+def hook_commands(project: Path) -> tuple[list[tuple[str, str]], bool]:
+    """Every settings.json hook command that runs one of OUR hooks,
+    as (settings-file-name, command). The bool says whether a Stop hook
+    for this runtime was found at all."""
+    found: list[tuple[str, str]] = []
+    stop = False
+    for name in ("settings.json", "settings.local.json"):
+        path = project / ".claude" / name
+        if not path.exists():
+            continue
+        try:
+            doc = json.loads(path.read_text())
+        except Exception:
+            continue    # not ours to validate; never block an arm on it
+        hooks = doc.get("hooks")
+        if not isinstance(hooks, dict):
+            continue
+        for event, groups in hooks.items():
+            for group in groups if isinstance(groups, list) else []:
+                for hook in (group or {}).get("hooks", []):
+                    cmd = str((hook or {}).get("command", ""))
+                    if not any(h in cmd for h in OUR_HOOKS):
+                        continue
+                    found.append((name, cmd))
+                    if event == "Stop":
+                        stop = True
+    return found, stop
+
+
+def check_hook_wiring(project: Path, r: Refusals) -> list[tuple[str, str]]:
+    """A hook wired by a RELATIVE path stops working the moment anything
+    changes the shell cwd, and the PreToolUse matcher is broad enough
+    (`Bash|Write|Edit|NotebookEdit`) that the broken config blocks every
+    tool that could repair it. Run 0004 lost a whole session that way,
+    with no way back.
+
+    Refusing here is the same trade as every other refusal in this
+    script: a named problem now instead of a dead run later — except
+    this one also takes the session's ability to fix itself."""
+    commands, has_stop = hook_commands(project)
+    for name, cmd in commands:
+        for token in shlex.split(cmd):
+            if not any(h in token for h in OUR_HOOKS):
+                continue
+            if token.startswith(ANCHORED_PREFIXES):
+                continue
+            r.add("hooks", f".claude/{name} runs `{token}` by a RELATIVE "
+                           "path: one `cd` in the session moves the shell "
+                           "cwd and the hook can no longer find itself — "
+                           "and the PreToolUse matcher then blocks every "
+                           "tool that could repair it. Anchor it: "
+                           "$CLAUDE_PROJECT_DIR/" + token.lstrip("./"))
+    if commands and not has_stop:
+        return [("hooks", "no Stop hook for netdust-flow in .claude/ — the "
+                          "marker will be written but nothing will drive "
+                          "the walker")]
+    if not commands:
+        return [("hooks", "no netdust-flow Stop hook found in .claude/"
+                          "settings.json — if it is not wired at user "
+                          "level, this run will be armed and never driven")]
+    return []
+
+
 # ── budget, dry, gitignore ───────────────────────────────────────────
 
 def read_budget(feature_dir: Path) -> int:
@@ -457,6 +528,7 @@ def main() -> int:
 
     pack = load_pack(project, r)
     warnings = check_requires(pack, r)
+    warnings += check_hook_wiring(project, r)
 
     binds: dict[str, str] = {"netdust_flow": str(RUNTIME)}
     binds.update(binds_from_claude_md(project))

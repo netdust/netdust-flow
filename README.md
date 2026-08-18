@@ -263,6 +263,26 @@ Claude Code plus the Stop hook — nothing else. Symlink this checkout:
 
     ln -s "$(pwd)" ~/.claude/netdust-flow
 
+Wire both hooks in the project's `.claude/settings.json`. **Anchor every
+path** — `$CLAUDE_PROJECT_DIR` or absolute, never relative:
+
+```json
+{ "hooks": {
+    "Stop": [ { "hooks": [ { "type": "command",
+      "command": "python3 $CLAUDE_PROJECT_DIR/.flow/hooks/loop-gate.py" } ] } ],
+    "PreToolUse": [ { "matcher": "Bash|Write|Edit|NotebookEdit",
+      "hooks": [ { "type": "command",
+      "command": "python3 $CLAUDE_PROJECT_DIR/.flow/hooks/pretooluse-guard.py"
+      } ] } ] } }
+```
+
+A relative path here is not a style question. One `cd` moves the shell
+cwd, the hook can no longer find itself, and because the PreToolUse
+matcher covers Bash, Write and Edit, the broken config blocks every tool
+that could repair it — the session is unrecoverable. Run 0004 lost one
+that way. `flow-arm` refuses to arm a project wired like that, and warns
+when it can find no Stop hook at all (a run nothing will ever drive).
+
 ## Deliberately not here
 
 Parallel fan-out (solo operation), an external runner (the file format
