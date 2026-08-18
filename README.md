@@ -246,8 +246,12 @@ are tamper-resistant, not tamper-proof. `hooks/pretooluse-guard.py`
 (a PreToolUse hook) denies the direct forge — `git notes` writes via
 Bash, and Write/Edit to twins or journal — so a forge must be
 deliberate, not incidental; it makes no airtight claim. The marker
-(`tasks/.netdust-flow.json`) is deliberately left editable because
-arming writes it; that residue is named in the guard. Wire the guard
+(`tasks/.netdust-flow.json`) is guarded too, as of run 0004: arming
+writes it from inside flow-arm's own process, which never passes
+through the hook, so the only writer the hook can see is an agent
+hand-writing JSON. Deleting it stays allowed — that is `/flow off` —
+and the legitimate edits have tools (`flow-arm --reclaim`,
+`--reset-counters`), neither of which loses run identity. Wire the guard
 in `settings.json` alongside the Stop hook. The journal must also be
 GITIGNORED in the project (as `/flow` arm ensures): tracked, it would
 dirty the worktree mid-run and the ledger's clean-tree check could

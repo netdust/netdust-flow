@@ -25,10 +25,20 @@ pass through this hook):
      hook). Hand-editing either is exactly the forge the boundary
      names; the .yaml source and everything else stay editable.
 
-Deliberately NOT denied: the marker (`tasks/.netdust-flow.json`).
-Arming a flow legitimately writes it, and telling human-arm from
-agent-tamper needs more than a path match — deferred, named here so
-the omission is a decision, not a gap.
+  3. A Write/Edit whose target is the marker (`tasks/*.netdust-flow
+     .json`) — the persisted machine state: node, budget, counters,
+     run identity. This used to be the named omission, on the
+     reasoning that arming legitimately writes it. But arming writes
+     it from inside flow-arm's own process, which never passes
+     through this hook, so the only writer this hook can see is an
+     agent hand-writing JSON — the one assertion flow-arm's own
+     docstring says the system never checked. The legitimate reasons
+     to touch a live marker now have tools: `flow-arm --reclaim` and
+     `flow-arm --reset-counters`, neither of which loses run identity
+     the way a re-arm would.
+
+Deleting the marker stays allowed: that is `/flow off`, and the block
+reason printed at every stop tells the operator to do exactly that.
 
 Contract: reads a PreToolUse event as JSON on stdin; on a match,
 prints a `deny` decision and exits 0; otherwise stays silent (no
@@ -57,6 +67,7 @@ NOTES_WRITE = re.compile(
 # path targets that only a verifier/compiler/hook may write
 TWIN = re.compile(r"(^|/)flows/[^/]+\.json$")
 JOURNAL = re.compile(r"\.flow-journal\.jsonl$")
+MARKER = re.compile(r"(^|/)tasks/\.netdust-flow\.json$")
 
 
 def deny(reason: str) -> None:
@@ -90,6 +101,15 @@ def evaluate(tool: str, tool_input: dict) -> str | None:
             return ("netdust-flow trust boundary: the run journal "
                     "(.flow-journal.jsonl) is written only by the Stop "
                     "hook. It is a record, not a workspace.")
+        if MARKER.search(norm):
+            return ("netdust-flow trust boundary: the marker "
+                    "(tasks/.netdust-flow.json) is the persisted machine "
+                    "state — node, budget, counters, run identity — and "
+                    "is written only by flow-arm.py and the Stop hook. "
+                    "To hand a stranded run to this session: `flow-arm.py "
+                    "--reclaim`. To clear counters a defect spent: "
+                    "`flow-arm.py --reset-counters`. To stop the loop "
+                    "entirely, DELETE the file (`/flow off`).")
     return None
 
 

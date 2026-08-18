@@ -212,6 +212,13 @@ def test_every_copy_of_the_marker_name_agrees(tmp_path):
     assert hook.MARKER_REL == flowspec.MARKER_REL
     assert hook.MARKER_SCHEMA == flowspec.MARKER_SCHEMA
 
+    # The guard names the marker as a path regex, not a constant, so it
+    # is checked by what it matches rather than by what it equals.
+    guard = constants(ROOT / "hooks" / "pretooluse-guard.py")
+    assert guard.MARKER.search(str(flowspec.MARKER_REL))
+    assert not guard.MARKER.search("tasks/.harness-loop.json"), (
+        "the guard must not police netdust-agent's marker")
+
 
 def test_the_hook_ignores_the_netdust_agent_marker(tmp_path):
     """A netdust-agent marker in the same repo must be invisible here —
