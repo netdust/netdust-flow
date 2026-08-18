@@ -135,3 +135,70 @@ produced it.
   correct behavior automatically. The freshness mechanism deferred
   for seals ("stricter freshness is deferred until a drill shows a
   leak") has now been drilled for reviews, and it held.
+
+---
+
+## Runs 0002 + 0003 — agent-evals-v0 (the controlled pair) · site@636f6ca684ee / site@008f6d7bb85a
+
+**Delivered:** a WordPress opening-hours feature (settings page,
+shortcode, public open-now endpoint) on a wp-starter render — run
+twice under agent-evals-v0, plus an unharnessed baseline of the same
+task. **Method note:** remote container (no ddev/wp — gate-suite/
+render/a11y removed as a documented lab variant, which biases AGAINST
+the harness); hook cranked manually run-0001-style; seals recorded by
+the experiment operator on the owner's standing instruction. Model
+claude-fable-5 on all sides. Full record: the experiment archive
+(REPORT.md + three trees).
+
+**Run 0002 (site road, no convergence):**
+
+    7 stops · 4 iterations · 2 seals · red-gates 1/7 (ledger refusing
+    early finish) · every check gate first-pass · disarm-finished
+
+**Machinery verdict:** first real arm of the wp-starter payload; the
+full I5 chain ran live for the first time (two fresh-context reviews,
+tree-bound, --not implementer). Zero overrides.
+
+**Quality verdict:** *verification integrity without intent
+preservation.* An adversarial examiner graded the harnessed tree and
+the unharnessed baseline with the same checklist: both satisfied the
+verification suite; only the baseline satisfied the ask's complete
+intent. The experiment spec dropped a deliverable named in the ask
+(the endpoint's front-page badge consumer), and every downstream
+verifier correctly verified the reduced scope. The road delivered a
+consumer-less endpoint with every gate green. Escaped-intent count: 1.
+Also: baseline (~1x tokens) claimed done and was essentially right;
+harness (~2.5x) produced evidence, not extra defects caught.
+
+**Run 0003 (single variable: gate-converge after gate-plan):**
+
+    8 stops · 5 iterations · 2 seals · red-gates 2/11 (both
+    gate-converge: no evidence, then NOT_CONVERGED) · disarm-finished
+
+Same task, same model, run 0002's intent-lossy paperwork byte-for-byte,
+its implementation commits cherry-picked unchanged. A neutrally
+prompted fresh-context convergence reviewer returned NOT_CONVERGED
+with exactly one item — the dropped badge, cited from the ask's own
+wording — and zero invented gaps; a second reviewer independently
+confirmed the revised spec CONVERGED. The badge shipped. Cost of
+convergence: two ~49k reviews at the cheapest point in the road.
+Escaped-intent count: 0.
+
+**Findings:**
+
+- **F5 (protocol gap → invariant I7, fixed this run):** no gate asked
+  whether the spec still represented the ask. Fixed: `converge-check.py`
+  (kernel) + convergence gate in the wp-starter road + trust-boundary
+  tests (stale-spec refused, author-signed refused, NOT_CONVERGED never
+  green).
+- **F6 (infra, fixed upstream):** the shipped wp-starter payload's
+  pack.yaml carried a `flows:` key pack.schema.json refuses — the
+  payload could not arm at all. Found by the arm refusal, before any
+  agent spend.
+- **F7 (lab/config, open as arm-time warning candidate):** base_ref
+  equal to the working branch makes diff-scoped gates vacuous
+  (gate-security scanned an empty diff); mitigated in-run by a direct
+  file scan. Fix landed pack-side: `--require-scope`.
+- **F8 (guardrail observation):** the dry-loop disarmed a replay whose
+  paperwork pre-existed (no checkbox movement) — correct behavior;
+  replays arm with `--max-dry` headroom.

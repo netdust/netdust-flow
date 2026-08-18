@@ -76,6 +76,7 @@ and **with what result**. Where each store stands:
 | attest record | `tree` field (`HEAD^{tree}` at pass time) | `attest.py` running the named `cmd` | the `unit` | `ts` | recorded only on exit 0 |
 | seal record | `tree` field; `--fresh` re-checks it against disk | the human, via `seal.py record` | the `node`'s decision | `ts` | `approved` / `rejected` |
 | review evidence | `tree:` line in the report, checked against the CURRENT `HEAD^{tree}` by `review-check.py` | the report's required `reviewer:` line (recorded identity) + `attest.py` (the record) | the named review scope | attest `ts` | `VERDICT: CLEAN` only |
+| convergence evidence | `tree:` line + sha256 bindings to the ASK file and the CURRENT spec, all checked by `converge-check.py` | the report's required `reviewer:` line — never the spec's author (`--not`) | spec-vs-ask fidelity | report content | `VERDICT: CONVERGED` only |
 | journal event | not tree-bound | the Stop hook, relaying walker traces | gate exits, stop decisions | per-event `ts` | observability — **never authority** |
 | marker | not tree-bound | the hook | machine position only | — | never evidence |
 
