@@ -391,6 +391,55 @@ def ensure_gitignore(project: Path) -> list[str]:
 
 # ── marker surgery on a live run ─────────────────────────────────────
 
+LEGACY_MARKER_REL = Path("tasks") / ".harness-loop.json"
+
+
+def migrate(project: Path) -> int:
+    """Move a run armed under the OLD marker name to the new one.
+
+    The F02 rename fixed a filename two harnesses were fighting over,
+    and in doing so orphaned every run already armed: the hook reads the
+    new path, finds nothing, and the run silently stops being driven.
+    Re-arming is not the answer — it mints a new run id, and attests are
+    run-scoped, so every task already proven green would read as open
+    again. This moves the file and adds the schema line, and changes
+    nothing else.
+
+    A legacy marker without `flow` + `node` belongs to netdust-agent,
+    which has always used that name for its own schema. Moving it would
+    be the same class of mistake the rename exists to end."""
+    legacy = project / LEGACY_MARKER_REL
+    target = project / MARKER_REL
+    if target.exists():
+        print(f"REFUSED  [armed]  {MARKER_REL} already exists — a live run "
+              "is here; migrating over it would discard its identity")
+        return 1
+    if not legacy.exists():
+        print(f"REFUSED  [migrate]  no {LEGACY_MARKER_REL} to migrate")
+        return 1
+    try:
+        marker = json.loads(legacy.read_text())
+    except Exception as exc:
+        print(f"REFUSED  [migrate]  {LEGACY_MARKER_REL} does not parse ({exc})")
+        return 1
+    if not (marker.get("flow") and marker.get("node")):
+        print(f"REFUSED  [migrate]  {LEGACY_MARKER_REL} carries no flow/node "
+              "— that is netdust-agent's marker, not ours, and moving it "
+              "would repeat the mistake the rename ends")
+        return 1
+
+    marker = {"schema": flowspec.MARKER_SCHEMA, **marker}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(marker, indent=2) + "\n")
+    legacy.unlink()
+    ensure_gitignore(project)
+
+    print(f"migrated {LEGACY_MARKER_REL} → {MARKER_REL}")
+    print(f"        run {marker.get('run_id', '?')} at `{marker.get('node')}`"
+          f" — id, node and counters preserved; attests still scope")
+    return 0
+
+
 def remarker(project: Path, reclaim: bool, reset: bool) -> int:
     """Edit the live marker in place — the two cases that used to need a
     hand-written JSON file.
@@ -454,6 +503,9 @@ def main() -> int:
     ap.add_argument("--max-dry", type=int, default=None)
     ap.add_argument("--gate-timeout", type=int, default=600)
     ap.add_argument("--plugin-root", type=Path, default=DEFAULT_PLUGIN_ROOT)
+    ap.add_argument("--migrate", action="store_true",
+                    help="move a run armed under the pre-0.6 marker name "
+                         "to tasks/.netdust-flow.json, keeping its run id")
     ap.add_argument("--reclaim", action="store_true",
                     help="hand a live run to the session that stops next "
                          "(the owning session died); keeps run id + node")
@@ -462,7 +514,8 @@ def main() -> int:
                          "re-arming; keeps run id + node")
     args = ap.parse_args()
 
-    if (args.reclaim or args.reset_counters) and args.flow != "__none__":
+    if (args.reclaim or args.reset_counters or args.migrate) \
+            and args.flow != "__none__":
         print("REFUSED  [args]  --reclaim/--reset-counters operate on the "
               "LIVE marker and take no feature-dir or flow")
         return 1
@@ -474,6 +527,8 @@ def main() -> int:
     # script was built to remove, and still the door F09 left open.
     # Neither re-arms: run id, node and journal continuity are preserved,
     # which is the whole point of not disarming.
+    if args.migrate:
+        return migrate(project)
     if args.reclaim or args.reset_counters:
         return remarker(project, reclaim=args.reclaim,
                         reset=args.reset_counters)

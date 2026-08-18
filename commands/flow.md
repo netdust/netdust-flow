@@ -162,6 +162,16 @@ owning session died (a wedged session cannot release its own claim).
 Run id, node and journal continuity are preserved — this is not a
 re-arm, which would mint a new run id and split the journal.
 
+    python3 <netdust-flow>/bin/flow-arm.py --migrate
+
+Moves a run armed under the pre-rename marker name
+(`tasks/.harness-loop.json`) to `tasks/.netdust-flow.json`. Needed once
+per already-armed run: the hook reads the new path, so without it the
+run is simply never driven again. Re-arming is NOT the alternative — it
+mints a new run id, and attests are run-scoped, so every task already
+proven green would read as open. A legacy marker with no flow/node is
+netdust-agent's and is refused.
+
     python3 <netdust-flow>/bin/flow-arm.py --reset-counters
 
 Zeroes `iteration` and `dry` on a live run, for the case where a defect

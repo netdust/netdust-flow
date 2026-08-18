@@ -253,3 +253,87 @@ def test_the_stop_instruction_names_the_namespaced_marker(tmp_path):
     reason = json.loads(out)["reason"]
     assert ".netdust-flow.json" in reason
     assert ".harness-loop.json" not in reason
+
+
+# ── F02 follow-through: the rename must not strand live runs ─────────
+
+def test_migrate_moves_a_legacy_marker_and_keeps_run_identity(tmp_path):
+    """The rename orphans every run that was armed under the old name:
+    the hook reads the new path, finds nothing, and the run simply stops
+    being driven. Re-arming is not the answer — it mints a NEW run id,
+    and attests are run-scoped, so every task already proven would read
+    as open again."""
+    home, cwd = setup(tmp_path, DELIVER, "spec")
+    legacy = json.loads((cwd / MARKER_REL).read_text())
+    legacy.pop("schema", None)
+    (cwd / MARKER_REL).unlink()
+    (cwd / LEGACY_MARKER_REL).write_text(json.dumps(legacy))
+
+    p = subprocess.run(
+        [sys.executable, str(ARM), "--migrate", "--project", str(cwd)],
+        capture_output=True, text=True)
+
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert not (cwd / LEGACY_MARKER_REL).exists()
+    moved = marker_of(cwd)
+    assert moved["schema"] == "netdust-flow/1"
+    assert moved["node"] == legacy["node"]
+    assert moved["feature_dir"] == legacy["feature_dir"]
+    assert moved["iteration"] == legacy["iteration"]
+
+
+def test_migrate_preserves_the_run_id(tmp_path):
+    home, cwd = setup(tmp_path, DELIVER, "spec")
+    legacy = json.loads((cwd / MARKER_REL).read_text())
+    legacy["run_id"] = "r20260818-174545-48f9"
+    legacy.pop("schema", None)
+    (cwd / MARKER_REL).unlink()
+    (cwd / LEGACY_MARKER_REL).write_text(json.dumps(legacy))
+
+    subprocess.run([sys.executable, str(ARM), "--migrate",
+                    "--project", str(cwd)], capture_output=True, text=True)
+
+    assert marker_of(cwd)["run_id"] == "r20260818-174545-48f9", (
+        "attests are scoped to the run id; losing it voids every one")
+
+
+def test_migrate_refuses_a_marker_that_is_not_ours(tmp_path):
+    """netdust-agent's marker lives at the legacy path too, and it is
+    not ours to move."""
+    home, cwd = setup(tmp_path, DELIVER, "spec")
+    (cwd / MARKER_REL).unlink()
+    (cwd / LEGACY_MARKER_REL).write_text(json.dumps(
+        {"spec_dir": "specs/demo", "iteration": 3}))
+
+    p = subprocess.run(
+        [sys.executable, str(ARM), "--migrate", "--project", str(cwd)],
+        capture_output=True, text=True)
+
+    assert p.returncode == 1
+    assert "REFUSED" in p.stdout
+    assert (cwd / LEGACY_MARKER_REL).exists(), "left untouched"
+    assert not (cwd / MARKER_REL).exists()
+
+
+def test_migrate_refuses_to_overwrite_a_live_marker(tmp_path):
+    home, cwd = setup(tmp_path, DELIVER, "spec")
+    (cwd / LEGACY_MARKER_REL).write_text(json.dumps(
+        {"flow": "x", "node": "y", "feature_dir": "specs/demo"}))
+
+    p = subprocess.run(
+        [sys.executable, str(ARM), "--migrate", "--project", str(cwd)],
+        capture_output=True, text=True)
+
+    assert p.returncode == 1
+    assert marker_of(cwd)["node"] == "spec", "the live run is untouched"
+
+
+def test_migrate_with_nothing_to_migrate_says_so(tmp_path):
+    home, cwd = setup(tmp_path, DELIVER, "spec")
+    (cwd / MARKER_REL).unlink()
+
+    p = subprocess.run(
+        [sys.executable, str(ARM), "--migrate", "--project", str(cwd)],
+        capture_output=True, text=True)
+
+    assert p.returncode == 1 and "REFUSED" in p.stdout
