@@ -246,7 +246,7 @@ are tamper-resistant, not tamper-proof. `hooks/pretooluse-guard.py`
 (a PreToolUse hook) denies the direct forge — `git notes` writes via
 Bash, and Write/Edit to twins or journal — so a forge must be
 deliberate, not incidental; it makes no airtight claim. The marker
-(`tasks/.harness-loop.json`) is deliberately left editable because
+(`tasks/.netdust-flow.json`) is deliberately left editable because
 arming writes it; that residue is named in the guard. Wire the guard
 in `settings.json` alongside the Stop hook. The journal must also be
 GITIGNORED in the project (as `/flow` arm ensures): tracked, it would

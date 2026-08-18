@@ -23,7 +23,7 @@ Claude Code Stop hook  (hooks/loop-gate.py)
 
 ## Arming (`bin/flow-arm.py`)
 
-The marker (`tasks/.harness-loop.json`) is the only input to the whole
+The marker (`tasks/.netdust-flow.json`) is the only input to the whole
 machine — it names the flow, the start node, the gate commands and the
 budget — and everything downstream refuses to guess about it. Arming
 is where that file is proven before it is written: the flow resolves

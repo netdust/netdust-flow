@@ -80,7 +80,7 @@ def test_attests_are_scoped_by_feature(repo):
 def _arm(cwd, run_id):
     """Write a minimal marker so attest/seal/ledger see an armed run."""
     (cwd / "tasks").mkdir(exist_ok=True)
-    (cwd / "tasks" / ".harness-loop.json").write_text(
+    (cwd / "tasks" / ".netdust-flow.json").write_text(
         json.dumps({"feature_dir": "specs/demo", "run_id": run_id}))
 
 

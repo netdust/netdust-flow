@@ -56,7 +56,7 @@ State transition    (derived by the walker/ledger)
 | `refs/notes/attest` | `attest.py` (ran the check) | `ledger.py` | `{unit, cmd, exit, ts, tree}` per passed check |
 | `refs/notes/seal` | `seal.py record` (human say-so) | `seal.py check` (a gate) | `{node, decision, ts, tree}` per human decision |
 | `<fd>/.flow-journal.jsonl` | the Stop hook (fail-open) | `flow-eval.py` | every gate exit (red included) + stop decisions |
-| `tasks/.harness-loop.json` | the hook | the hook | persisted machine position (marker) |
+| `tasks/.netdust-flow.json` | the hook | the hook | persisted machine position (marker) |
 
 Freshness rules, stated honestly: per-unit attests prove a unit was
 verified when built; a SUITE attest must sit on the finishing HEAD

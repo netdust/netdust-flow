@@ -17,7 +17,7 @@ Resolve `<netdust-flow>` via the stable symlink `~/.claude/netdust-flow`
     python3 <netdust-flow>/bin/flow-arm.py <feature-dir> <flow>
 
 That is the whole step: run it, show its output verbatim, and stop if
-it refused. Do not write `tasks/.harness-loop.json` by hand.
+it refused. Do not write `tasks/.netdust-flow.json` by hand.
 
 Arming used to be six preconditions written out here and executed by
 goodwill — the one assertion the system never checked, in a system
@@ -113,7 +113,7 @@ itself the evidence.
 
 ## /flow off  (disarm)
 
-Delete `tasks/.harness-loop.json`. Confirm in one line. (The run's
+Delete `tasks/.netdust-flow.json`. Confirm in one line. (The run's
 journal stays; a manually disarmed run has no terminal stop event, so
 `/flow eval` reports it as open — that is the honest state.)
 
@@ -143,8 +143,44 @@ re-run `flow-lint --compile` (new hash), and the next runs form a new
 cohort to compare against. Never let an agent rewrite a flow from an
 eval report — the graph is a contract, not a prompt.
 
+## Whose run is it  (session ownership)
+
+The marker is project-scoped, but a RUN belongs to ONE session. The
+first stop after arming writes that session's id into the marker; every
+other session that stops in the repo is then as inert as if there were
+no marker at all — no gates run, no counters move, nothing is written.
+
+This exists because run 0004 lost a run without it: a second session
+was merely WATCHING, and two of its stops — which of course moved no
+task counter — were counted as dry iterations of the builder's run and
+disarmed it. Watching a run is not free until the claim is in place.
+
+    python3 <netdust-flow>/bin/flow-arm.py --reclaim
+
+Hands a live run to whichever session stops next. Use it when the
+owning session died (a wedged session cannot release its own claim).
+Run id, node and journal continuity are preserved — this is not a
+re-arm, which would mint a new run id and split the journal.
+
+    python3 <netdust-flow>/bin/flow-arm.py --reset-counters
+
+Zeroes `iteration` and `dry` on a live run, for the case where a defect
+rather than the work spent the budget. Same preservation rules. Both
+modes exist so the legitimate reasons to touch the marker never require
+hand-writing it.
+
 ## Foreign markers
 
 The hook only drives markers that carry `flow` + `node`; a marker
 without them is ignored untouched (logged, stop allowed) — it is not
 ours to delete.
+
+`tasks/.netdust-flow.json` is namespaced, and every marker this runtime
+writes declares `"schema": "netdust-flow/1"`. A marker whose schema
+names something else is refused even in our own filename. Until run
+0004 this file was `tasks/.harness-loop.json`, which netdust-agent also
+claims for a completely different schema: arming one harness armed the
+other, which then read our marker, ran its own gate against a plan
+written to our contract, and reported the mismatch as a regression —
+pointing sessions straight through a human seal. One filename, two
+owners, no discriminator.

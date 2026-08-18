@@ -2,7 +2,7 @@
 """
 loop-gate.py — netdust-flow Stop hook: the flow driver.
 
-When a run is ARMED (marker file tasks/.harness-loop.json exists,
+When a run is ARMED (marker file tasks/.netdust-flow.json exists,
 written by /flow), this hook consults bin/flow-check.py (the walker)
 at every session stop and BLOCKS the stop while the flow is
 unfinished. No marker → no-op (zero cost for every normal session).
@@ -26,7 +26,7 @@ Guardrails that always win: stop_hook_active bypass (one block per stop
 cycle), marker deletion by the human, and fail-open — any internal error
 allows the stop. Logs to ~/.claude/logs/memory-hook.log.
 
-Marker schema (tasks/.harness-loop.json — runtime state, gitignored by
+Marker schema (tasks/.netdust-flow.json — runtime state, gitignored by
 /flow; run_id is minted here at the first stop of an armed run):
   {"feature_dir": "specs/<feature>", "iteration": 0, "max_iterations": 25,
    "last_done": 0, "dry": 0,
@@ -61,7 +61,11 @@ from pathlib import Path
 from datetime import datetime
 
 LOG_PATH = Path.home() / ".claude" / "logs" / "memory-hook.log"
-MARKER_REL = Path("tasks") / ".harness-loop.json"
+# Canonically bin/flowspec.py; repeated as a literal because the
+# hook path takes no imports that could fail before the fail-open
+# wrapper is in scope. test_marker_identity.py asserts they agree.
+MARKER_REL = Path("tasks") / ".netdust-flow.json"
+MARKER_SCHEMA = "netdust-flow/1"
 DEFAULT_MAX_ITERATIONS = 25
 MAX_DRY = 2
 
@@ -154,6 +158,14 @@ def main() -> None:
     marker = json.loads(marker_path.read_text())
     feature_dir = cwd / marker.get("feature_dir", "")
 
+    # A marker that names another harness's schema is not ours, even in
+    # our own filename. A marker with NO schema line predates the
+    # discriminator and is judged the old way, on its flow fields.
+    schema = marker.get("schema")
+    if schema is not None and schema != MARKER_SCHEMA:
+        log(f"ignore foreign schema={schema!r} cwd={cwd}")
+        return
+
     flow = marker.get("flow")
     flow_node = marker.get("node")
     if not (flow and flow_node):
@@ -164,6 +176,26 @@ def main() -> None:
     if hook_input.get("stop_hook_active"):
         log(f"bypass stop_hook_active cwd={cwd}")
         return
+
+    # RUN OWNERSHIP (F01). The marker is project-scoped, so this hook
+    # fires on EVERY session that stops in the repo — including a second
+    # session merely watching the run. Run 0004 lost run 1340 to exactly
+    # that: two of the observer's stops moved no task counter, counted as
+    # dry iterations of the BUILDER's run, and disarmed it.
+    #
+    # The claim is minted at the first stop, where run_id already is:
+    # arming happens in a Bash call that does not know its own session
+    # id. A session that finds someone else's claim is as inert as a
+    # session with no marker at all. A host that sends no session_id
+    # drives unchanged — scoping must never trap a run.
+    # Stranded claim (the owning session died): `flow-arm --reclaim`.
+    session = hook_input.get("session_id")
+    if session:
+        owner = marker.get("session")
+        if owner and owner != session:
+            log(f"ignore foreign session={session} owner={owner} cwd={cwd}")
+            return
+        marker["session"] = session
 
     max_iter = int(marker.get("max_iterations", DEFAULT_MAX_ITERATIONS))
     iteration = int(marker.get("iteration", 0))
@@ -224,7 +256,10 @@ def main() -> None:
              "reason": reason[:200]}])
         if flow_next:
             marker["node"] = flow_next
-            marker_path.write_text(json.dumps(marker))
+        # written unconditionally: a first stop that lands on a human
+        # node must still persist its session claim, or the run stays
+        # unowned and the next foreign stop takes it.
+        marker_path.write_text(json.dumps(marker))
         log(f"yield reason=blocked iter={iteration} detail={reason!r}")
         return  # human's turn; marker stays armed for when work resumes
 

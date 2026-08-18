@@ -197,12 +197,12 @@ def armed(tmp_path, flow_check_path):
               "flow": str(tmp_path / "whatever.json"), "node": "build",
               "flow_check": str(flow_check_path), "binds": {},
               "gate_timeout": 30}
-    (cwd / "tasks" / ".harness-loop.json").write_text(json.dumps(marker))
+    (cwd / "tasks" / ".netdust-flow.json").write_text(json.dumps(marker))
     return home, cwd
 
 
 def marker_of(cwd):
-    p = cwd / "tasks" / ".harness-loop.json"
+    p = cwd / "tasks" / ".netdust-flow.json"
     return json.loads(p.read_text()) if p.exists() else None
 
 
@@ -230,10 +230,10 @@ def test_corrupt_marker_is_left_untouched(tmp_path):
     home.mkdir()
     cwd = tmp_path / "proj"
     (cwd / "tasks").mkdir(parents=True)
-    (cwd / "tasks" / ".harness-loop.json").write_text("{not json")
+    (cwd / "tasks" / ".netdust-flow.json").write_text("{not json")
     rc, _ = run_hook(cwd, home)
     assert rc == 0                            # crash caught, session free
-    assert (cwd / "tasks" / ".harness-loop.json").read_text() == "{not json"
+    assert (cwd / "tasks" / ".netdust-flow.json").read_text() == "{not json"
 
 
 # ── 7. review evidence is bound to the exact tree it reviewed ────────

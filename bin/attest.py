@@ -23,7 +23,7 @@ tamper-proof — an agent with bash could forge one. hooks/
 pretooluse-guard.py denies the DIRECT path (`git notes` writes via
 Bash, and Write/Edit to the compiled twins and journal), so a forge
 must be deliberate rather than incidental; it does not claim to be
-airtight, and the marker (tasks/.harness-loop.json) is deliberately
+airtight, and the marker (tasks/.netdust-flow.json) is deliberately
 left editable because arming legitimately writes it. Signing records
 would close the rest and is deferred as ceremony until a drill shows
 a leak.
@@ -38,7 +38,11 @@ import time
 from pathlib import Path
 
 NOTES_REF = "refs/notes/attest"
-MARKER_REL = Path("tasks") / ".harness-loop.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import flowspec  # noqa: E402 — stdlib-only by contract
+
+# One name, one definition (bin/flowspec.py). Run 0004 F02.
+MARKER_REL = flowspec.MARKER_REL
 
 
 def current_run(cwd: Path) -> str | None:

@@ -25,7 +25,7 @@ pass through this hook):
      hook). Hand-editing either is exactly the forge the boundary
      names; the .yaml source and everything else stay editable.
 
-Deliberately NOT denied: the marker (`tasks/.harness-loop.json`).
+Deliberately NOT denied: the marker (`tasks/.netdust-flow.json`).
 Arming a flow legitimately writes it, and telling human-arm from
 agent-tamper needs more than a path match — deferred, named here so
 the omission is a decision, not a gap.

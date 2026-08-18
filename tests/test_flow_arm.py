@@ -5,7 +5,7 @@ throwaway project, assert on the exit code, the refusal lines, and the
 marker it did (or did not) write.
 
 The load-bearing assertion in every refusal test is the SAME one:
-`tasks/.harness-loop.json` must not exist. A refusal that still armed
+`tasks/.netdust-flow.json` must not exist. A refusal that still armed
 is worse than no check at all — it would put a known-broken config on
 the road with a warning nobody reads.
 """
@@ -18,7 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 FLOW_ARM = ROOT / "bin" / "flow-arm.py"
-MARKER_REL = Path("tasks") / ".harness-loop.json"
+MARKER_REL = Path("tasks") / ".netdust-flow.json"
 
 # No placeholders but {feature_dir} (the walker's own) — the base case:
 # a project that owns its flow and the gate the flow names.

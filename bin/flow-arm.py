@@ -5,7 +5,7 @@
                 [--bind NAME=VALUE ...] [--budget N] [--max-dry N]
                 [--plugin-root DIR]
 
-The marker (`tasks/.harness-loop.json`) is the ONLY input to the whole
+The marker (`tasks/.netdust-flow.json`) is the ONLY input to the whole
 machine: it names the flow, the starting node, the gate commands, and
 the budget. Everything downstream refuses to guess — the walker BLOCKS
 on an unbound placeholder, an unknown node, an unmatched edge — and
@@ -80,7 +80,7 @@ except ImportError:  # pragma: no cover
              "authoring-side, never in the Stop-hook path")
 
 RUNTIME = Path(__file__).resolve().parents[1]
-MARKER_REL = Path("tasks") / ".harness-loop.json"
+MARKER_REL = flowspec.MARKER_REL
 JOURNAL_NAME = ".flow-journal.jsonl"
 PLACEHOLDER_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 BIND_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -318,13 +318,63 @@ def ensure_gitignore(project: Path) -> list[str]:
     return added
 
 
+# ── marker surgery on a live run ─────────────────────────────────────
+
+def remarker(project: Path, reclaim: bool, reset: bool) -> int:
+    """Edit the live marker in place — the two cases that used to need a
+    hand-written JSON file.
+
+    `reclaim` drops the session claim so the next session to stop takes
+    the run. Without it, a claim outlives the session that made it and a
+    run whose owner died (run 0004, session 2, wedged by a broken hook
+    path) could never be driven again by anyone.
+
+    `reset` zeroes the loop counters, for a run whose budget was spent by
+    a defect rather than by work.
+
+    Neither touches `run_id` or `node`: re-arming would mint a new run id
+    and split the journal, which is exactly the loss flow-arm refuses to
+    let a re-arm cause."""
+    marker_path = project / MARKER_REL
+    if not marker_path.exists():
+        print(f"REFUSED  [armed]  no {MARKER_REL} in {project} — "
+              "nothing to reclaim; `/flow <dir> <flow>` arms a run")
+        return 1
+    try:
+        marker = json.loads(marker_path.read_text())
+    except Exception as exc:
+        print(f"REFUSED  [marker]  {MARKER_REL} does not parse ({exc})")
+        return 1
+    schema = marker.get("schema")
+    if schema is not None and schema != flowspec.MARKER_SCHEMA:
+        print(f"REFUSED  [marker]  {MARKER_REL} declares schema "
+              f"`{schema}` — not netdust-flow's; refusing to edit it")
+        return 1
+
+    did = []
+    if reclaim:
+        released = marker.pop("session", None)
+        did.append(f"released session claim ({released or 'none held'})")
+    if reset:
+        marker["iteration"] = 0
+        marker["dry"] = 0
+        did.append("counters zeroed")
+    marker_path.write_text(json.dumps(marker, indent=2) + "\n")
+
+    print(f"marker  {marker.get('flow_id') or marker.get('run_id', '?')} "
+          f"at `{marker.get('node')}` — " + "; ".join(did))
+    print("        run id and node preserved; the journal stays one run")
+    return 0
+
+
 # ── main ─────────────────────────────────────────────────────────────
 
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Arm the netdust-flow walker for one feature")
-    ap.add_argument("feature_dir", type=Path)
-    ap.add_argument("flow", help="flow NAME (project-first) or a path")
+    ap.add_argument("feature_dir", type=Path, nargs="?", default=Path("."))
+    ap.add_argument("flow", nargs="?", default="__none__",
+                    help="flow NAME (project-first) or a path")
     ap.add_argument("--project", type=Path, default=Path.cwd())
     ap.add_argument("--node", default="__start__",
                     help="start node; past __start__ grafts onto existing work")
@@ -333,9 +383,30 @@ def main() -> int:
     ap.add_argument("--max-dry", type=int, default=None)
     ap.add_argument("--gate-timeout", type=int, default=600)
     ap.add_argument("--plugin-root", type=Path, default=DEFAULT_PLUGIN_ROOT)
+    ap.add_argument("--reclaim", action="store_true",
+                    help="hand a live run to the session that stops next "
+                         "(the owning session died); keeps run id + node")
+    ap.add_argument("--reset-counters", action="store_true",
+                    help="zero iteration/dry on a live run without "
+                         "re-arming; keeps run id + node")
     args = ap.parse_args()
 
+    if (args.reclaim or args.reset_counters) and args.flow != "__none__":
+        print("REFUSED  [args]  --reclaim/--reset-counters operate on the "
+              "LIVE marker and take no feature-dir or flow")
+        return 1
+
     project = args.project.resolve()
+
+    # Marker surgery on a LIVE run. Both modes exist so the legitimate
+    # cases stop requiring a hand-written marker — the one assertion this
+    # script was built to remove, and still the door F09 left open.
+    # Neither re-arms: run id, node and journal continuity are preserved,
+    # which is the whole point of not disarming.
+    if args.reclaim or args.reset_counters:
+        return remarker(project, reclaim=args.reclaim,
+                        reset=args.reset_counters)
+
     feature_dir = args.feature_dir
     if feature_dir.is_absolute():
         try:
@@ -464,6 +535,9 @@ def main() -> int:
     ignored = ensure_gitignore(project)
 
     marker = {
+        # The discriminator FIRST, so a reader that opens this file can
+        # refuse it before interpreting a single other key (F02).
+        "schema": flowspec.MARKER_SCHEMA,
         "feature_dir": str(feature_dir),
         "iteration": 0,
         "max_iterations": budget,

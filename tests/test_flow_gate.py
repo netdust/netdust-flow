@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GATE = ROOT / "hooks" / "loop-gate.py"
 FLOW_CHECK = ROOT / "bin" / "flow-check.py"
 DELIVER = ROOT / "flows" / "deliver.json"
+MARKER_REL = Path("tasks") / ".netdust-flow.json"
 PATCH = ROOT / "flows" / "patch.json"
 
 GATE_STUB = """\
@@ -44,7 +45,8 @@ def setup(tmp_path, flow, node, binds=None, extra=None):
                      ["add", "-A"],
                      ["commit", "--allow-empty", "-m", "init"]):
         subprocess.run(["git", *git_args], capture_output=True, cwd=cwd)
-    marker = {"feature_dir": "specs/demo", "iteration": 0,
+    marker = {"schema": "netdust-flow/1",
+              "feature_dir": "specs/demo", "iteration": 0,
               "max_iterations": 25, "last_done": 0, "dry": 0,
               "flow": str(flow), "node": node,
               "flow_check": str(FLOW_CHECK),
@@ -61,7 +63,7 @@ def setup(tmp_path, flow, node, binds=None, extra=None):
         marker["binds"].update(binds)
     if extra:
         marker.update(extra)
-    (cwd / "tasks" / ".harness-loop.json").write_text(json.dumps(marker))
+    (cwd / MARKER_REL).write_text(json.dumps(marker))
     return home, cwd
 
 
@@ -75,7 +77,7 @@ def run_gate(cwd, home):
 
 
 def marker_of(cwd):
-    p = cwd / "tasks" / ".harness-loop.json"
+    p = cwd / MARKER_REL
     return json.loads(p.read_text()) if p.exists() else None
 
 
@@ -205,7 +207,7 @@ def test_flowless_marker_is_ignored_untouched(tmp_path):
     home, cwd = setup(tmp_path, PATCH, "build")
     m = marker_of(cwd)
     del m["flow"], m["node"], m["flow_check"]
-    (cwd / "tasks" / ".harness-loop.json").write_text(json.dumps(m))
+    (cwd / MARKER_REL).write_text(json.dumps(m))
     rc, out = run_gate(cwd, home)
     assert rc == 0 and out.strip() == ""
     assert marker_of(cwd) is not None       # left untouched

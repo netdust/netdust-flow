@@ -33,7 +33,11 @@ import sys
 from pathlib import Path
 
 NOTES_REF = "refs/notes/attest"
-MARKER_REL = Path("tasks") / ".harness-loop.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import flowspec  # noqa: E402 — stdlib-only by contract
+
+# One name, one definition (bin/flowspec.py). Run 0004 F02.
+MARKER_REL = flowspec.MARKER_REL
 
 
 def current_run(cwd: Path) -> str | None:

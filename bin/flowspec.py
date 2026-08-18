@@ -35,6 +35,25 @@ SCRIPT_SUFFIXES = (".py", ".sh")
 PACK_DIR = Path(".flow")
 MAX_EXTENDS_DEPTH = 8
 
+# The marker: this runtime's persisted machine state, CANONICALLY named
+# here. It was `tasks/.harness-loop.json` until run 0004 — a name
+# netdust-agent also claims, for a completely different schema. Arming
+# one harness therefore armed the other, which read our marker, ran its
+# own gate against a plan written to our contract, and reported the
+# format mismatch as "plan artifacts regressed" — an instruction that
+# pointed sessions straight THROUGH a human seal. Two harnesses, one
+# filename, no discriminator. The schema line is what lets any reader
+# refuse a marker it does not own.
+#
+# `hooks/loop-gate.py` and `hooks/pretooluse-guard.py` repeat these two
+# literals rather than importing them: the hook path must run on a bare
+# interpreter, and an import that fails at module scope would crash
+# before the fail-open wrapper is in scope. `test_marker_identity.py`
+# asserts every copy agrees, so the duplication is machine-checked
+# instead of trusted.
+MARKER_REL = Path("tasks") / ".netdust-flow.json"
+MARKER_SCHEMA = "netdust-flow/1"
+
 
 # ── gates ────────────────────────────────────────────────────────────
 
