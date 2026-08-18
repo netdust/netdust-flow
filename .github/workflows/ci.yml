@@ -38,15 +38,35 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: lint every flow, including the examples
         run: python bin/flow-lint.py flows/*.yaml examples/*/flow.yaml
-      # The walker reads the compiled twin. A twin that drifts from its
-      # source is the one config error the runtime cannot catch for a
-      # host without PyYAML, so prove here that every committed twin is
-      # exactly what the source compiles to.
       - name: twins are in sync with their sources
         run: |
           python bin/flow-lint.py flows/*.yaml --compile
           git diff --exit-code -- flows/ \
             || { echo "::error::a committed .json twin is stale — run flow-lint --compile"; exit 1; }
+
+  protocol-eval:
+    name: adversarial protocol eval
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: identify to git
+        run: |
+          git config --global user.email "ci@netdust-flow.invalid"
+          git config --global user.name "netdust-flow ci"
+      - name: run protocol-v0 cohort
+        run: python bin/eval-protocol.py
+      - name: save machine-readable eval
+        if: always()
+        run: python bin/eval-protocol.py --json > protocol-eval.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: protocol-eval-v0
+          path: protocol-eval.json
 
   hooks-run-without-authoring-deps:
     # The Stop hook path must work on a bare interpreter: no PyYAML, no
