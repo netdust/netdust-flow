@@ -1,0 +1,2 @@
+{"event":"gate","run":"eval-netdust","flow":"fixture","fhash":"fixture-v0","node":"gate-spec","exit":0,"iter":1}
+{"event":"stop","run":"eval-netdust","flow":"fixture","fhash":"fixture-v0","node":"gate-spec","decision":"disarm","iter":1}
