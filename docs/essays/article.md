@@ -487,11 +487,101 @@ It is:
 
 The first run produced eight escaped defects.
 
-Future runs should reduce that number.
+Later runs found two deeper boundaries — a spec that dropped the ask,
+a graph that could be rewritten — and each forced a design change:
+convergence, then graph anchoring.
 
-If they do not, the design must change.
+That is the pattern. The design changes when a run finds a gap. It has
+not stopped finding them, and the honest record ([evaluation.md](evaluation.md))
+keeps the failures visible on purpose.
+
+One thing it has *not* shown: that this discipline is cheaper, in
+tokens, than letting a strong agent run free. On the one small task
+measured, it cost more and shipped less — buying verifiability, not
+completeness. Whether that trade inverts as work grows larger,
+riskier, and less watched is the open question, and the reason to keep
+measuring rather than to declare victory.
 
 ---
+
+# The story continued: two more boundaries
+
+The eight escaped defects were the first boundary the system found in
+itself. Two more followed, and each was found the same way — by trying
+to break the system, not by trusting it.
+
+## The spec can be perfectly built and still wrong
+
+A later controlled experiment ran the *same* task through the road
+twice, with the same model, holding one thing constant: a
+specification that had quietly dropped a deliverable the original
+request named.
+
+The first run passed every gate. Every check was honestly green.
+
+And it shipped the wrong product — an endpoint with nothing to consume
+it, because the spec had never mentioned the consumer the ask asked
+for.
+
+The gates had proved the work matched the specification.
+
+Nothing had proved the specification still matched the request.
+
+This is a different failure than weak verification. It is *verification
+integrity without intent preservation* — a perfectly verified answer to
+the wrong question. The fix was a new gate that asks, before any code
+is written: does the spec still represent what was asked? A
+fresh-context reviewer must say yes, on the record, or the road routes
+back to planning. Run it again with that gate, same lossy spec, and the
+dropped deliverable is caught at plan time. The correct product ships.
+
+## The graph itself was an unguarded root of trust
+
+Then a red-team agent was given the armed road and one instruction:
+reach "done" by any means.
+
+It did. Not by forging evidence — the guard denied that. It rewrote the
+road's own map, rerouting the graph straight to the finish, and
+recompiled. Every gate was simply gone.
+
+The system protected everything the graph produced — the evidence, the
+records, the journal — but not the graph itself. The map was a root of
+trust with no lock on it.
+
+The fix locks the map to the moment the work was authorized: the graph
+is anchored when the run is armed, and the walker refuses to execute a
+map that isn't the one that was armed. Authoring stays free — an agent
+can still design any road it likes — but an *armed* road cannot be
+silently rewritten mid-run to escape its own gates. The same attack,
+after the fix, is blocked.
+
+# Completion is three claims, not one
+
+The original thesis was about one boundary: agents shouldn't decide
+when the work is done; gates should. The experiments revealed that
+"done" actually rests on three independent claims, and each had to be
+attacked before it could be trusted.
+
+```
+        the ask
+           │
+           ▼   INTENT — does the spec represent what was asked?
+      CONVERGED?
+           │ yes
+           ▼   AUTHORITY — is this the road that was authorized?
+        ARMED?
+           │ yes
+           ▼   EVIDENCE — does the work satisfy that spec?
+      VERIFIED?
+           │ yes
+           ▼
+         DONE
+```
+
+A capable agent can be trusted to route inside this structure — to
+choose how to move between the boxes — without being trusted to
+redefine the boxes. Routing is not authority. The graph exists to make
+that line visible and enforceable.
 
 # Why this matters beyond netdust-flow
 
@@ -542,6 +632,9 @@ The model does the work.
 
 The model proposes the route.
 
-The model never gets the last word.
+The model never gets the last word — because the last word requires
+three things the model cannot grant itself: that the plan still means
+what was asked, that the road was the one authorized, and that the
+evidence is real.
 
 **Agents may route. Only gates finish.**

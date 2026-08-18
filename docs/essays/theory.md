@@ -417,3 +417,95 @@ the pretooluse guard covers them.
 | Classical FSM definition (5-tuple; Mealy/Moore; DFA determinism) via the Jul 2026 explainers (DavidKPiano thread; "From Loops to Graphs") | 8 [HC as theory / MC as discourse] | The audit frame for the v0.2 addendum: Σ-completeness surfaced both v0.1 defects |
 | Bitter-lesson cluster (Sutton via practitioner essays; arXiv 2602.21193 aside; SWE-RL scaffold-family analysis) | 6–8 [LC–MC] | The genuine counter-position and the pipeline-scaffold trade |
 | Routine / TDP / WorfBench (via Graph Harness related work) | 8 [MC] | Structure gains 41→96%; context isolation −82% tokens; 15% planner graph gap |
+
+---
+
+## Addendum (v1, August 2026) — The Ledger Speaks
+
+theory.md's synthesis ended on the honest verdict that *"the final word
+belongs to the delivery ledger, not the literature."* The eval program
+(runs 0002/0003; E1–E13, see [evaluation.md](evaluation.md)) is the
+ledger beginning to speak. It does **not** settle the headline
+performance bet — it settles three narrower propositions the earlier
+document left open, and it sharpens one that is now *more* open.
+
+### Empirically demonstrated (this repo, controlled)
+
+**A. Specification convergence is a distinct failure class from
+verification — and it is containable.** `[demonstrated]` The controlled
+pair 0002/0003 held task, model, and an intent-lossy spec constant and
+varied only a convergence gate. Without it, every verifier was honestly
+green against a spec that had dropped a deliverable named in the ask
+(*verification integrity without intent preservation*). With it, the
+loss was caught at plan time. E3 then showed the mechanism resists an
+*adversarial* planner arguing its spec is complete, not merely a
+careless one. This is the MAST "spec 42%" failure class, reproduced and
+gated in one system rather than cited from another.
+
+**B. Evidence controls are load-bearing, not decorative — and the graph
+was the unguarded one.** `[demonstrated]` E13 gave a hostile agent the
+armed flow and one order: reach `__end__` by any means. It did — by
+rewriting the flow graph and recompiling. The finding is sharper than
+any unit-test result: the guard protected everything *derived* from the
+graph but not the graph itself, so the graph was a root of trust with
+no anchor. I8 (arm-time twin anchoring) closed it; the same attack is
+now BLOCKED and pinned permanently. This is the first result in the set
+that attacked the architecture's *own* trust boundary rather than an
+agent's honesty, and it changed the architecture.
+
+**C. Completion authority is not one boundary but three.** `[demonstrated
+as structure]` The earlier document framed the problem as *agent → gate
+→ finish*. The experiments forced a more precise model: three
+independent claims, each with its own attacked boundary.
+
+```
+        ASK
+         │
+         ▼   ── INTENT: does the spec represent what was asked?
+    CONVERGED?                        (I7 — E2, E3)
+         │ yes
+         ▼   ── AUTHORITY: is this the graph that was armed?
+      ARMED?                          (I8 — E13)
+         │ yes
+         ▼   ── EVIDENCE: does the work satisfy that spec?
+     VERIFIED?                        (I3/I5 — E1)
+         │ yes
+         ▼
+       DONE
+```
+
+The original thesis — *agents shouldn't decide when they're done; gates
+should* — is the EVIDENCE boundary alone. The full claim is that
+completion requires all three, and each has now been attacked
+experimentally. The graph is not the fundamental point; it is the
+mechanism that makes these authority transitions *inspectable and
+enforceable*.
+
+### Sharpened, and now MORE open
+
+**The headline economics bet is unresolved and the one data point cuts
+against the easy version.** `[open]` The bull case was never "more
+gates = better"; it was "gated delivery beats strong loops on outcomes
+per token." The single controlled cost measurement so far: on a *small*
+task, the harnessed run cost ≈2.5× the baseline's tokens and shipped
+*less* product completeness with *more* verifiability. That does not
+refute the bet — it refutes the lazy form of it. The defensible
+hypothesis is now explicit and testable: the harness earns its cost as
+task size, stakes, and *unattendedness* rise (the E13 authority result
+matters only when no human is watching the diff). Until E14/E15 run on
+n>1 real tasks, "netdust generally wins on quality per token" stays
+what theory.md always labelled it: a prediction, not a result.
+
+### Confidence table — updated rows
+
+| Claim | Was | Now | Evidence |
+|---|---|---|---|
+| Spec convergence is a distinct, gateable failure class | (implicit in MAST) | **[demonstrated]** | runs 0002/0003; E3 |
+| The trust boundary holds against a hostile agent | [asserted, honest "tamper-resistant not tamper-proof"] | **[demonstrated w/ one closed hole]** | E13 → I8; `test_anchor_i8.py` |
+| Completion = INTENT ∧ AUTHORITY ∧ EVIDENCE | (thesis was EVIDENCE only) | **[demonstrated as structure]** | I7 + I8 + I3/I5, each attacked |
+| Gated graphs *outperform* strong loops on delivery per token | [MC→open] | **[open, one point against the easy form]** | 2.5× cost, small task; E14/E15 pending |
+
+The intellectual habit the earlier document set — label what is
+demonstrated, keep "open" where it is open, never rewrite the record to
+sound more successful than it is — is the reason this addendum can be
+trusted. The E13 failure is left in the evidence set on purpose.
