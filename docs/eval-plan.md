@@ -15,6 +15,16 @@ real weakness is. Status as of E3.
   controlled pair: intent-lossy paperwork, gate as the only variable.
 - **E3 — convergence resists rationalization** (PASS). A spec that
   argues its own completeness; the reviewer saw through it.
+- **E4 — stale evidence, discrimination probed** (DONE). Empirically:
+  `--fresh` is DISCRIMINATING on working-tree noise (an uncommitted
+  edit outside the feature dir stays fresh; inside stales) and STRICT
+  on commits (any commit anywhere re-asks). The strictness is the
+  deliberate fail-safe — the runtime refuses to judge whether a
+  committed file is relevant to a ship decision, so it re-asks rather
+  than guess. Pinned by test_fresh_seal_stales_on_any_commit... .
+- **E9 — requirement mutation** (DONE). A mutated ask stales the
+  convergence report by sha256 binding. Pinned by
+  test_mutated_ask_stales_the_convergence_report.
 
 ## The one thing genuinely untested — highest priority
 
@@ -30,13 +40,6 @@ real weakness is. Status as of E3.
 
 ## Deferred, each for a SPECIFIC reason (not "skip")
 
-- **E4 — stale evidence, DISCRIMINATING not merely strict.** Unit
-  tests prove `--fresh` blocks on a changed tree. The open question
-  they do NOT answer: does it stay GREEN on an irrelevant change (a
-  README edit outside the feature dir) while blocking on a relevant
-  one? If `--fresh` is strict-but-blind it will nag on every commit
-  and get disabled. Cheap: add two discrimination tests. → next tests
-  pass, not an experiment.
 - **E5 — self-review end-to-end.** `--not implementer` is unit-tested;
   the untested part is an implementer told to fake a reviewer identity.
   Folds into E13's harness.
@@ -44,9 +47,6 @@ real weakness is. Status as of E3.
   marker unchanged. NOT covered: a half-written journal creating a
   false green, a resumed run re-running a human decision, a stale
   marker reading as current. Real gaps, correctness-level. After E13.
-- **E9 — requirement mutation.** Already closed by construction:
-  `converge-check` binds sha256(ask), so a mutated ask stales the
-  report. → a two-line test, not an experiment.
 - **E12 — model portability.** Scientifically the strongest claim
   (authority external to the intelligence). BLOCKED here: this
   environment serves one model family; a true cross-vendor reviewer
