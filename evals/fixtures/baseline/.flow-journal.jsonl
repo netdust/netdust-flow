@@ -1,0 +1,2 @@
+{"event":"gate","run":"eval-baseline","flow":"fixture","fhash":"fixture-v0","node":"gate-spec","exit":0,"iter":1}
+{"event":"stop","run":"eval-baseline","flow":"fixture","fhash":"fixture-v0","node":"gate-spec","decision":"yield","iter":1}
