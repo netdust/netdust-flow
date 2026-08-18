@@ -1,41 +1,40 @@
 # netdust-flow
 
-Evidence-driven delivery protocol for AI-assisted software
-development: **a YAML file, one Stop hook, and exit codes.**
+**Most agent harnesses constrain what an agent can _do_. netdust
+constrains what an agent can declare _finished_.**
 
-Agents may create work and propose routing.
-Only verified evidence can advance or finish delivery.
+An evidence-driven delivery runtime for AI-assisted software
+development. It separates three authorities from the coding agent —
+the agent performs the work and routes through the workflow, but owns
+none of these transitions:
+
+- **Intent** — convergence establishes that the working specification
+  still represents the original request.
+- **Execution** — arm-time anchoring establishes which workflow graph
+  is authorized to run.
+- **Completion** — gates establish the evidence required to finish.
 
 ```
-              Agent
-                |
-                v
-         creates artifact
-                |
-                v
-        deterministic gate
-          /            \
-       fail            pass
-        |                |
-        v                v
-      Agent         human seal?
-                         |
-                     approved
-                         |
-                         v
-                    next state
-                         |
-                         v
-                      __end__
+   ASK ──► CONVERGE ──► ARM ──► WORK ──► GATES ──► FINISH
+            (intent)  (execution)      (completion)
+            I7          I8              I3 · I5
 ```
 
+Each transition has been attacked experimentally and holds (see
+[docs/essays/evaluation.md](docs/essays/evaluation.md)): a perfectly
+verified build still shipped the wrong product when the spec lost the
+ask (E2); a hostile agent reached "done" with no work done by rewriting
+the graph, until anchoring closed it (E13). **Verification is not
+enough if the specification can lose intent or the execution graph can
+change underneath the verifier.** That is the sharper claim, and the
+reason this exists.
+
+The implementation is small — **a YAML file, one Stop hook, and exit
+codes** — but the claim is not: **workflow authority belongs to
+verifiable evidence, not to the system that produced the artifact.**
 Agents produce work. Verifiers produce evidence. The flow derives
-state. Only verified evidence can finish delivery. Humans make
-explicit, recorded decisions; completion is a state transition, not a
-statement.
-The implementation is small; the claim is not: **workflow authority
-belongs to verifiable evidence, not to the system that produced the
-artifact.**
+state. Humans make explicit, recorded decisions; completion is a state
+transition, not a statement.
 
 ## Three words, used precisely
 
